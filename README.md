@@ -1,8 +1,8 @@
 # Laboul Phylogenomics
 
-Manuscript - 
-NCBI Project Number - 
-Zenodo Repository - 
+Manuscript -  
+NCBI Project Number -  
+Zenodo Repository -  
 
 Bioinformatic pipelines and analysis of de-novo genome assemblies and phylogenomics of Laboulbeniomycetes
 
