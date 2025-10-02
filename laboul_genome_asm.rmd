@@ -1,0 +1,3381 @@
+---
+title: "laboul_genomes_full_pipeline"
+output: html_document
+date: "2024-11-14"
+---
+
+This is for the genomes sequenced in Belgium by me, additional sequence by Warre, as well as some additional gene predictions for the RAxML trees
+
+NP Run    Barcode   Tube Number   Species -> raname sample 
+1         BC1       3             Nycteromyces strebliduns (1699a) -> sample1
+1         BC2       4             Stigatomyces sp. (3960a) -> sample2
+1         BC3       5             Herpomyces sp. (3784a) -> sample3
+1         BC4       6             Laboulbenia bicornis (4333a) -> sample4
+1         BC5       7             Laboulbenia maixei (4197b) -> sample5
+2         BC6       8             Hesperomyces harmonie (5273b) -> sample6
+3         BC1       na            Herpomyces periplanetae (5868a) -> sample7
+3         BC2       na            Laboulbenia flagellata sl (5869a) -> sample8
+3         BC3       na            Rickia wasmannii (5870a) -> sample9
+3         BC4       na            Monoicomyces sp. (5611a) -> sample10
+3         BC5       na            Laboulbenia vulgaris sl (5727a) -> sample11
+3         BC6       na            Stigmatomyces trianguliapicalis (5733a) -> sample12   
+
+Also have
+Subbaromyces splendans        Whole genome sequencing PE 300bp
+
+```{bash downloading warre samples}
+#!/bin/bash
+#SBATCH --time=24:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks=10
+#SBATCH --job-name=warre_download
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/warre_download.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/warre_download.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+cd /scratch/alpine/beyo2625/laboul_all
+
+wget --no-check-certificate --content-disposition "https://filesender.belnet.be/download.php?token=c6c8d349-420a-47cf-b5d0-7fcf10dd003a&files_ids=3335287"
+wget --no-check-certificate --content-disposition "https://filesender.belnet.be/download.php?token=c6c8d349-420a-47cf-b5d0-7fcf10dd003a&files_ids=3335286"
+```
+*DONE 19th Feb 2025*
+
+```{bash md5 check}
+md5sum laboul_genomes29_01_2025.tar.gz
+```
+*DONE 19th feb 2025*
+
+```{bash tar and gunzipping}
+#!/bin/bash
+#SBATCH --time=24:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks=10
+#SBATCH --job-name=warre_unzip
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/unzip.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/unzip.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+cd /scratch/alpine/beyo2625/laboul_all
+
+tar -xvzf laboul_genomes29_01_2025.tar.gz ./
+```
+
+Uploaded my samples using `scp`. 
+
+
+## 1. Basecalling and Demultiplexing
+
+I am redoing the basecalling on the pod5 with the newer SUP algorithms. 
+I am combining all my samples (As they had unique barcodes) and then also running Warres seperately. 
+
+```{bash dorado with gpus for my samples}
+#!/bin/bash
+#SBATCH --time=12:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --partition=aa100
+#SBATCH --gres=gpu
+#SBATCH --nodes=1
+#SBATCH --mem=120G
+#SBATCH --ntasks=3
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=basecalling_gent
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/gent/basecall.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/gent/basecall.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)" 
+conda activate dorado_env
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/gent
+dorado \
+basecaller \
+--device auto \
+--kit-name SQK-NBD114-24 \
+--output-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/gent \
+sup \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_pod/gent
+```
+*DONE 19th Feb 2025*
+
+```{bash dorado with gpus for my samples}
+#!/bin/bash
+#SBATCH --time=12:00:00
+#SBATCH --partition=blanca-curc-gpu
+#SBATCH --qos=blanca-curc-gpu
+#SBATCH --account=blanca-curc-gpu
+#SBATCH --gres=gpu
+#SBATCH --nodes=1
+#SBATCH --mem=100G
+#SBATCH --ntasks=3
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=basecalling_warre
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/warre/basecall.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/warre/basecall.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)" 
+conda activate dorado_env
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/warre
+dorado \
+basecaller \
+--device auto \
+--kit-name SQK-NBD114-24 \
+--output-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/warre \
+sup \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_pod/warre
+```
+*DONE 19th Feb 2025*
+
+```{bash demultiplexing the basecalled reads for mine}
+#!/bin/bash
+#SBATCH --time=16:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=60G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=demultiplex_gent
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/demux/gent/demultiplex.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/demux/gent/demultiplex.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)" 
+conda activate dorado_env
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+dorado \
+demux \
+--output-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/demux/gent \
+--no-classify \
+--emit-fastq \
+--emit-summary \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/gent/calls_2025-02-19_T19-38-47.bam
+```
+*DONE 19th Feb 2025*
+REMOVE    128K	./7274ff291562d6e73f77dc6b4890c95440831b4d_SQK-NBD114-24_barcode12.fastq
+KEEP    1.8G	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode01.fastq
+REMOVE    121M	./7274ff291562d6e73f77dc6b4890c95440831b4d_unclassified.fastq
+REMOVE    128K	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode18.fastq
+KEEP    1.8G	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode04.fastq
+REMOVE    451M	./21e3c8b307cbdec7016f50e523515cef696d0e04_unclassified.fastq
+REMOVE   512	./7274ff291562d6e73f77dc6b4890c95440831b4d_SQK-NBD114-24_barcode04.fastq
+KEEP    2.4G	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode02.fastq
+KEEP    1.1G	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode03.fastq
+REMOVE    512	./7274ff291562d6e73f77dc6b4890c95440831b4d_SQK-NBD114-24_barcode05.fastq
+REMOVE    512	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode13.fastq
+KEEP    1.6G	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode05.fastq
+REMOVE    128K	./7274ff291562d6e73f77dc6b4890c95440831b4d_SQK-NBD114-24_barcode03.fastq
+REMOVE    512	./21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode15.fastq
+KEEP    1.8G	./7274ff291562d6e73f77dc6b4890c95440831b4d_SQK-NBD114-24_barcode06.fastq
+REMOVE    128K	./7274ff291562d6e73f77dc6b4890c95440831b4d_SQK-NBD114-24_barcode02.fastq
+
+Files starting with *72* are run 2
+Files starting with *21* are run 1
+
+```{bash demultiplexing the basecalled reads for warre}
+#!/bin/bash
+#SBATCH --time=16:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=60G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=demultiplex_warre
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/demux/warre/demultiplex.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/demux/warre/demultiplex.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)" 
+conda activate dorado_env
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+dorado \
+demux \
+--output-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/demux/warre \
+--no-classify \
+--emit-fastq \
+--emit-summary \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/basecalled/warre/calls_2025-02-20_T17-06-14.bam
+```
+*DONE 24th Feb 2025*
+3.7G	./9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode05.fastq
+2.2G	./9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode03.fastq
+6.4G	./9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode04.fastq
+128K	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode11.fastq
+512	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode24.fastq
+512	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode20.fastq
+2.1G	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_unclassified.fastq
+128K	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode10.fastq
+512	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode17.fastq
+512	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode14.fastq
+512	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode16.fastq
+128K	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode15.fastq
+128K	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode09.fastq
+128K	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode12.fastq
+512	./bad_barcodes/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode08.fastq
+2.1G	./bad_barcodes
+919M	./barcoding_summary.txt
+0	./demultiplex.out
+5.4G	./9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode06.fastq
+512	./demux.job
+3.1G	./9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode01.fastq
+128K	./demultiplex.err
+4.4G	./9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode02.fastq
+28G	.
+
+And now renaming everything so can process all in one go and loop scripts. Renaming from the demux folder to the raw_reads folder. 
+
+```{bash moving and renaming}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes
+cp demux/gent/21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode01.fastq raw_reads/sample01.fastq
+cp demux/gent/21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode02.fastq raw_reads/sample02.fastq
+cp demux/gent/21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode03.fastq raw_reads/sample03.fastq
+cp demux/gent/21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode04.fastq raw_reads/sample04.fastq
+cp demux/gent/21e3c8b307cbdec7016f50e523515cef696d0e04_SQK-NBD114-24_barcode05.fastq raw_reads/sample05.fastq
+cp demux/gent/7274ff291562d6e73f77dc6b4890c95440831b4d_SQK-NBD114-24_barcode06.fastq raw_reads/sample06.fastq
+
+cp demux/warre/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode01.fastq raw_reads/sample07.fastq
+cp demux/warre/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode02.fastq raw_reads/sample08.fastq
+cp demux/warre/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode03.fastq raw_reads/sample09.fastq
+cp demux/warre/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode04.fastq raw_reads/sample10.fastq
+cp demux/warre/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode05.fastq raw_reads/sample11.fastq
+cp demux/warre/9cb270162e979c23f9fbc46a7e1ae612e0887e65_SQK-NBD114-24_barcode06.fastq raw_reads/sample12.fastq
+```
+
+
+## 2. Read Depth Check and Initial QC
+
+```{bash converting to fastas}
+mamba activate seqtk_env
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+seqtk seq -a sample01.fastq > sample01.fasta
+seqtk seq -a sample02.fastq > sample02.fasta
+seqtk seq -a sample03.fastq > sample03.fasta
+seqtk seq -a sample04.fastq > sample04.fasta
+seqtk seq -a sample05.fastq > sample05.fasta
+seqtk seq -a sample06.fastq > sample06.fasta
+seqtk seq -a sample07.fastq > sample07.fasta
+seqtk seq -a sample08.fastq > sample08.fasta
+seqtk seq -a sample09.fastq > sample09.fasta
+seqtk seq -a sample10.fastq > sample10.fasta
+seqtk seq -a sample11.fastq > sample11.fasta
+seqtk seq -a sample12.fastq > sample12.fasta
+wc -l *
+```
+*DONE 24th Feb 2025*
+
+Just doing this for the nanopore samples woop. 
+
+```{bash getting the summary of the read lengths of the hifi reads, include = F}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample01.fasta > sample01_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample02.fasta > sample02_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample03.fasta > sample03_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample04.fasta > sample04_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample05.fasta > sample05_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample06.fasta > sample06_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample07.fasta > sample07_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample08.fasta > sample08_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample09.fasta > sample09_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample10.fasta > sample10_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample11.fasta > sample11_rl.txt
+awk '/^>/{printf("%s\t",substr($0,2));next;} {print length}' sample12.fasta > sample12_rl.txt
+```
+*DONE 24th Feb 2025*
+
+```{bash downloading read lengths}
+scp -r beyo2625@login.rc.colorado.edu:/scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/\*.txt \
+/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals
+```
+*DONE 26th Feb 2025*
+
+```{bash running nanoplot}
+#!/bin/bash
+#SBATCH --time=168:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=20G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=nanoplot
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/demux/nanoplot_qc.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/demux/nanoplot_qc.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)" 
+conda activate nanoplot_env
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes
+
+NanoPlot \
+-t 10 \
+-o genome_qc/demux \
+--tsv_stats \
+--info_in_report \
+--fastq raw_reads/*.fastq
+```
+*DONE 24th Feb 2025*
+
+
+## 3. Contamination Check
+
+```{bash downloading databases}
+#!/bin/bash
+#SBATCH --time=12:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=40G
+#SBATCH --nodes=1
+#SBATCH --ntasks=10
+#SBATCH --job-name=db_download
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/dbs/db_download.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/dbs/db_download.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## purging and activating conda envvironment
+module purge
+eval "$(conda shell.bash hook)"
+conda activate blast_env
+
+## prok database
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/dbs
+update_blastdb.pl \
+--decompress ref_prok_rep_genomes \
+--num_threads 10
+
+## viral database
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/dbs
+update_blastdb.pl \
+--decompress ref_viruses_rep_genomes \
+--num_threads 10
+```
+*DONE 24th Feb 2025*
+
+```{bash running prok database blast}
+#!/bin/bash
+#SBATCH --time=01:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --job-name=loop_prok_blast
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/prok_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/prok_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls *.fasta | sed 's/\.fasta$//')
+
+echo "files going through prok blast"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --mem=20G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --ntasks=10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --job-name='"$PALPAL"'_contblast' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/'"$PALPAL"'_prok_blast.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/'"$PALPAL"'_prok_blast.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo 'conda activate blast_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+
+echo 'blastn \
+-query /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/'"${PALPAL}"'.fasta \
+-db /scratch/alpine/beyo2625/laboul_all/laboul_genomes/dbs/ref_prok_rep_genomes \
+-outfmt 6 \
+-evalue 20 \
+-num_threads 18 \
+-out /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/prok_contam_'"${PALPAL}"'.txt' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh 
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_prok_blast.sh
+done
+```
+*DONE*
+
+So 7 of them timed out on alpine with 24 hours. Re-submitted on blanca with 168 hours (7 days). 
+
+```{bash running viral blast}
+#!/bin/bash
+#SBATCH --time=01:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --job-name=loop_viral_blast
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/viral_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/viral_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls *.fasta | sed 's/\.fasta$//')
+
+echo "files going through viral blast"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --mem=20G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --ntasks=10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --job-name='"$PALPAL"'_vir_cont' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/'"$PALPAL"'_vir_blast.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/'"$PALPAL"'_vir_blast.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo 'conda activate blast_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+
+echo 'blastn \
+-query /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/'"${PALPAL}"'.fasta \
+-db /scratch/alpine/beyo2625/laboul_all/laboul_genomes/dbs/ref_viruses_rep_genomes \
+-outfmt 6 \
+-evalue 20 \
+-num_threads 18 \
+-out /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/viral_contam_'"${PALPAL}"'.txt' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh 
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/loop_err_out/"$PALPAL"_vir_blast.sh
+done
+```
+*DONE 24th Feb 2025*
+
+```{bash combining the prok and viral results, include=F}
+## Do this once the viral and prokaryotic blasts have run. 
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination
+cat viral_contam_sample*.txt > all_viral_hits_rr.txt
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination
+cat prok_contam_sample*.txt > all_prok_hits_rr.txt
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination
+cat all_prok_hits_rr.txt all_viral_hits_rr.txt > all_contaminant_hits_rr.txt
+```
+*DONE 26th Feb 2025*
+
+```{bash keeping the ones with bit score greater than 1000}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination
+awk '$12 > 1000 {print $0}' all_contaminant_hits_rr.txt > contaminant_hits_pv_passfilter_rr.txt
+```
+*DONE 26th Feb 2025*
+
+```{bash}
+scp beyo2625@login.rc.colorado.edu:/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination/contaminant_hits_pv_passfilter_rr.txt \
+/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals
+```
+*DONE 26th Feb 2025*
+
+
+## 4. RStudio Read Length and Contamination Checks 
+### 4.1 - Read Lengths
+
+```{r loading tidyverse}
+library(tidyverse)
+```
+
+```{r reading in to see number of raw reads, echo = F}
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample01_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample01") -> sa1_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample02_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample02") -> sa2_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample03_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample03") -> sa3_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample04_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample04") -> sa4_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample05_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample05") -> sa5_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample06_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample06") -> sa6_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample07_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample07") -> sa7_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample08_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample08") -> sa8_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample09_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample09") -> sa9_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample10_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample10") -> sa10_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample11_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample11") -> sa11_rl
+
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sample12_rl.txt",
+           header = F) %>%
+  dplyr::rename("read_id" = 1,
+                "length" = 5) %>% 
+  dplyr::select(1,5) %>% 
+  dplyr::mutate(sample = "sample12") -> sa12_rl
+```
+*DONE 26th Feb 2025*
+
+```{r grouping all the samples read lengths together}
+sa1_rl %>% 
+  rbind(sa2_rl) %>% 
+  rbind(sa3_rl) %>% 
+  rbind(sa4_rl) %>% 
+  rbind(sa5_rl) %>% 
+  rbind(sa6_rl) %>% 
+  rbind(sa7_rl) %>% 
+  rbind(sa8_rl) %>% 
+  rbind(sa9_rl) %>% 
+  rbind(sa10_rl) %>% 
+  rbind(sa11_rl) %>% 
+  rbind(sa12_rl) -> all_readlengths
+```
+*DONE 26th Feb 2025*
+
+```{r statistics of the read lengths}
+sa1_rl %>% nrow()
+sa2_rl %>% nrow()
+sa3_rl %>% nrow()
+sa4_rl %>% nrow()
+sa5_rl %>% nrow()
+sa6_rl %>% nrow()
+sa7_rl %>% nrow()
+sa8_rl %>% nrow()
+sa9_rl %>% nrow()
+sa10_rl %>% nrow()
+sa11_rl %>% nrow()
+sa12_rl %>% nrow()
+
+all_readlengths %>% 
+  group_by(sample) %>% 
+  summarise(average = mean(length), 
+            total = sum(length), 
+            middle = median(length), 
+            longest = max(length), 
+            smallest = min(length))
+```
+*NOT DONE*
+
+```{r histogram for read bins from raw hifi data, echo = F, fig.width=12, fig.height=7}
+ggplot(data = all_readlengths,
+       aes(x = length, fill = sample, group = sample)) +
+  geom_histogram(binwidth = 500) +
+  labs(x = "Raw Read Length", y = "Count", title = "Histogram of Raw Quality Reads") +
+  scale_y_continuous(
+    labels = function(x)
+      format(x, scientific = FALSE)
+  ) + 
+  xlim(0,40000) +
+  facet_wrap(~sample) + 
+  theme_bw()
+```
+*DONE 26th Feb 2025*
+
+
+### 4.2 - Contamination 
+
+```{r reading in and viewing the prokaryotic and viral hits that pass the threshold, echo = F}
+##prokaryotic and viral contaminants with bit scores >1000, blast in outfmt 6
+##also inner join with lengths so we have all that info in one place
+read.table(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/contaminant_hits_pv_passfilter_rr.txt", 
+           header = F) %>% 
+  dplyr::rename("read_ID" = 1, 
+         "subject_ID" = 2, 
+         "percent_identity" = 3, 
+         "align_length" = 4, 
+         "mismatches" = 5, 
+         "gap_open" = 6, 
+         "query_start" = 7, 
+         "query_end" = 8, 
+         "subject_start" = 9, 
+         "subject_end" = 10, 
+         "e_value" = 11, 
+         "bit_Score" = 12) %>%
+  inner_join(all_readlengths, 
+             by = c("read_ID" = "read_id")) -> pv_hits
+# View(pv_hits)
+
+## making the percentage of each hits align length to the contigs
+##so obviously if there is a blast result with 100% it means that whole contig is probably a contaminant
+pv_hits %>% 
+  mutate(percent_alignment = (align_length/length)*100) -> pv_hits
+
+pv_hits %>%
+  group_by(read_ID) %>% 
+  summarise(count = n()) -> pv_hit_for_removal
+# View(pv_hit_for_removal)
+```
+*DONE 26th Feb 2025*
+
+```{r histogram of percent alignment for the blast results to the contigs, echo = F}
+ggplot(data = pv_hits, 
+       aes(x = percent_alignment)) +
+  geom_histogram(binwidth = 10) + 
+  labs(x = "Raw Read Length", y = "Count", title = "Histogram of Raw Quality Reads") + 
+  scale_fill_manual(values = c("blue")) + 
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) + 
+  facet_wrap(~sample)
+```
+*DONE 26th Feb 2025*
+
+So this is showing me that the majority of the percentage alignments are actually pretty low and we do not have that many 100% sequences. Remember this is for each blast hit though and is not taking into account coverage over the whole raw read. 
+
+```{r histogram showing the alignment of all blast hits along the raw read, echo = F}
+ggplot(data = pv_hits %>% 
+  group_by(read_ID) %>% 
+   mutate(start = min(query_start), 
+          stop = max(query_end), 
+          align_length = stop - start, 
+          length = unique(length), 
+          percent_alignment = (align_length/length)*100), 
+       aes(x = percent_alignment)) +
+  geom_histogram(binwidth = 10) + 
+  labs(x = "Raw Read Length", y = "Count", title = "Histogram of Percentage Alignment over the whole raw read") + 
+  scale_fill_manual(values = c("blue")) + 
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) + 
+  facet_wrap(~sample) + 
+  theme_bw()
+```
+*DONE 26th Feb 2025*
+
+This is showing that when we group by the raw read that we are getting pretty high coverage over the raw reads, specifically for sample 5 !!!
+
+```{r looking at pv contaminants with less than 40% covered, include = F}
+pv_hits %>% 
+  group_by(read_ID) %>% 
+   summarise(start = min(query_start), 
+          stop = max(query_end), 
+          align_length = stop - start, 
+          length = unique(length), 
+          percent_alignment = (align_length/length)*100) %>%
+  arrange(desc(length), percent_alignment) %>%
+ dplyr::filter(percent_alignment > 20) -> summarised_alignments_raw_reads
+# View(summarised_alignments_raw_reads)
+nrow(summarised_alignments_raw_reads)
+nrow(pv_hits)
+```
+*DONE 26th Feb 2025*
+
+```{r ggplot for looking at contaminant on a contig, figure.width = 40, figure.height = 30}
+# ggplot(pv_hits %>% 
+#          dplyr::filter(sample %in% "sample01") %>%
+#          dplyr::filter(read_ID %in% "6b48a016-6164-43ff-a669-42ec192b5a79") %>% 
+#          mutate(subject_ID = as.factor(subject_ID))) + 
+#   geom_rect(aes(xmin=query_start, 
+#                 xmax=query_end, 
+#                 ymin=as.numeric(subject_ID)-0.4, 
+#                 ymax=as.numeric(subject_ID)+0.4), 
+#             fill="gray60") +
+#   geom_segment(aes(x=query_start, 
+#                    y=subject_ID, 
+#                    xend=query_end, 
+#                    yend=subject_ID), size=2, color="blue") +
+#   scale_y_discrete(expand = c(0.2, 0.2), 
+#                    guide = guide_axis(n.dodge = 3))
+#   scale_x_continuous(limits = c(0, 14000), 
+#                      expand = c(0, 0), 
+#                      labels = scales::number_format()) + 
+#   theme_bw() +
+#   theme(text = element_text(size = 5))
+```
+
+So for each sample we get the following. 
+
+```{r total number of reads in each sample}
+sa1_rl %>% nrow()
+sa2_rl %>% nrow()
+sa3_rl %>% nrow()
+sa4_rl %>% nrow()
+sa5_rl %>% nrow()
+sa6_rl %>% nrow()
+sa7_rl %>% nrow()
+sa8_rl %>% nrow()
+sa9_rl %>% nrow()
+sa10_rl %>% nrow()
+sa11_rl %>% nrow()
+sa12_rl %>% nrow()
+```
+*DONE 26th Feb 2025*
+
+```{r total number of prok and viral reads with bit greater than 1000 and covering greater 20 percent of the read}
+summarised_alignments_raw_reads %>% 
+  inner_join(all_readlengths, 
+             by = c("read_ID" = "read_id")) %>%
+  group_by(sample) %>%
+  summarise(count = n())
+```
+*DONE 26th Feb 2025*
+
+```{r number of reads remaining for assembly}
+sa1_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa1_contrem
+
+sa2_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa2_contrem
+
+sa3_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa3_contrem
+
+sa4_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa4_contrem
+
+sa5_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa5_contrem
+
+sa6_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa6_contrem
+
+sa7_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa7_contrem
+
+sa8_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa8_contrem
+
+sa9_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa9_contrem
+
+sa10_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa10_contrem
+
+sa11_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa11_contrem
+
+sa12_rl %>% 
+  dplyr::filter(!read_id %in% summarised_alignments_raw_reads$read_ID) -> sa12_contrem
+```
+*DONE 26th Feb 2025*
+
+```{r rows for original and contam cleaned}
+sa1_rl %>% nrow()
+sa1_contrem %>% nrow()
+
+sa2_rl %>% nrow()
+sa2_contrem %>% nrow()
+
+sa3_rl %>% nrow()
+sa3_contrem %>% nrow()
+
+sa4_rl %>% nrow()
+sa4_contrem %>% nrow()
+
+sa5_rl %>% nrow()
+sa5_contrem %>% nrow()
+
+sa6_rl %>% nrow()
+sa6_contrem %>% nrow()
+
+sa7_rl %>% nrow()
+sa7_contrem %>% nrow()
+
+sa8_rl %>% nrow()
+sa8_contrem %>% nrow()
+
+sa9_rl %>% nrow()
+sa9_contrem %>% nrow()
+
+sa10_rl %>% nrow()
+sa10_contrem %>% nrow()
+
+sa11_rl %>% nrow()
+sa11_contrem %>% nrow()
+
+sa12_rl %>% nrow()
+sa12_contrem %>% nrow()
+```
+*DONE 26th Feb 2025*
+
+```{r base paris of original versus contam removed}
+sa1_rl %>% 
+  summarise(tot_length = sum(length))
+sa1_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa2_rl %>% 
+  summarise(tot_length = sum(length))
+sa2_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa3_rl %>% 
+  summarise(tot_length = sum(length))
+sa3_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa4_rl %>% 
+  summarise(tot_length = sum(length))
+sa4_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa5_rl %>% 
+  summarise(tot_length = sum(length))
+sa5_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa6_rl %>% 
+  summarise(tot_length = sum(length))
+sa6_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa7_rl %>% 
+  summarise(tot_length = sum(length))
+sa7_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa8_rl %>% 
+  summarise(tot_length = sum(length))
+sa8_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa9_rl %>% 
+  summarise(tot_length = sum(length))
+sa9_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa10_rl %>% 
+  summarise(tot_length = sum(length))
+sa10_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa11_rl %>% 
+  summarise(tot_length = sum(length))
+sa11_contrem %>% 
+  summarise(tot_length = sum(length))
+
+sa12_rl %>% 
+  summarise(tot_length = sum(length))
+sa12_contrem %>% 
+  summarise(tot_length = sum(length))
+```
+*DONE 26th Feb 2025*
+
+```{r percentage of reads removed}
+((nrow(sa1_rl)-nrow(sa1_contrem))/nrow(sa1_rl)) * 100
+((nrow(sa2_rl)-nrow(sa2_contrem))/nrow(sa2_rl)) * 100
+((nrow(sa3_rl)-nrow(sa3_contrem))/nrow(sa3_rl)) * 100
+((nrow(sa4_rl)-nrow(sa4_contrem))/nrow(sa4_rl)) * 100
+((nrow(sa5_rl)-nrow(sa5_contrem))/nrow(sa5_rl)) * 100
+((nrow(sa6_rl)-nrow(sa6_contrem))/nrow(sa6_rl)) * 100
+((nrow(sa7_rl)-nrow(sa7_contrem))/nrow(sa7_rl)) * 100
+((nrow(sa8_rl)-nrow(sa8_contrem))/nrow(sa8_rl)) * 100
+((nrow(sa9_rl)-nrow(sa9_contrem))/nrow(sa9_rl)) * 100
+((nrow(sa10_rl)-nrow(sa10_contrem))/nrow(sa10_rl)) * 100
+((nrow(sa11_rl)-nrow(sa11_contrem))/nrow(sa11_rl)) * 100
+((nrow(sa12_rl)-nrow(sa12_contrem))/nrow(sa12_rl)) * 100
+```
+*DONE 26th Feb 2025*
+
+So this is pretty interesting
+- All look good bar
+- Sample 2 has ~40% contamination
+- Sample 5 has 70.5% contamination lol
+
+So now just need to make the good things to keep, write to a list, and do a `seqtk subseq` on it woooooooo. 
+
+```{r making filter objects}
+write.table(sa1_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa1_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa2_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa2_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa3_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa3_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa4_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa4_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa5_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa5_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa6_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa6_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa7_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa7_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa8_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa8_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa9_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa9_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa10_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa10_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa11_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa11_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+
+write.table(sa12_contrem %>% 
+              dplyr::select(read_id), 
+            file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals/sa12_clean.txt", 
+            row.names = F, 
+            col.names = F, 
+            quote = F)
+```
+*DONE 26th Feb 2025*
+
+```{bash uploading the filtering to the supercomputer to subset fasta files}
+cd /Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/contaminat_removals
+scp -r \*_clean.txt beyo2625@login.rc.colorado.edu:/scratch/alpine/beyo2625/laboul_all/laboul_genomes/contamination
+```
+*DONE 26th Feb 2025*
+
+```{bash getting rid of everything after first tab in fasta an d fastq files}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+awk -F" " '/^>/ {print $1; next} {print}' sample01.fasta > sample01_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample02.fasta > sample02_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample03.fasta > sample03_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample04.fasta > sample04_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample05.fasta > sample05_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample06.fasta > sample06_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample07.fasta > sample07_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample08.fasta > sample08_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample09.fasta > sample09_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample10.fasta > sample10_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample11.fasta > sample11_shorthead.fasta
+awk -F" " '/^>/ {print $1; next} {print}' sample12.fasta > sample12_shorthead.fasta
+
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample01.fastq > sample01_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample02.fastq > sample02_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample03.fastq > sample03_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample04.fastq > sample04_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample05.fastq > sample05_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample06.fastq > sample06_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample07.fastq > sample07_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample08.fastq > sample08_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample09.fastq > sample09_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample10.fastq > sample10_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample11.fastq > sample11_shorthead.fastq
+awk '{if(NR%4==1) {print "@"$1} else {print $0}}' sample12.fastq > sample12_shorthead.fastq
+```
+*DONE 26th Feb 2025*
+
+```{bash adding the at sign for the contamination files}
+for i in {1..12}; do
+    awk '{print "@"$0}' sa"${i}"_clean.txt > sa"${i}"_clean_comp.txt
+done
+```
+*DONE 26th Feb 2025*
+Actually do not need this above, `seqtk` works with the contam file how it is. 
+
+```{bash subsetting the fastas}
+mamba activate seqtk_env
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes
+
+seqtk subseq \
+raw_reads/sample01_shorthead.fasta \
+contamination/sa1_clean.txt > raw_reads/sample01_clean.fasta
+
+seqtk subseq \
+raw_reads/sample02_shorthead.fasta \
+contamination/sa2_clean.txt > raw_reads/sample02_clean.fasta
+
+seqtk subseq \
+raw_reads/sample03_shorthead.fasta \
+contamination/sa3_clean.txt > raw_reads/sample03_clean.fasta
+
+seqtk subseq \
+raw_reads/sample04_shorthead.fasta \
+contamination/sa4_clean.txt > raw_reads/sample04_clean.fasta
+
+seqtk subseq \
+raw_reads/sample05_shorthead.fasta \
+contamination/sa5_clean.txt > raw_reads/sample05_clean.fasta
+
+seqtk subseq \
+raw_reads/sample06_shorthead.fasta \
+contamination/sa6_clean.txt > raw_reads/sample06_clean.fasta
+
+seqtk subseq \
+raw_reads/sample07_shorthead.fasta \
+contamination/sa7_clean.txt > raw_reads/sample07_clean.fasta
+
+seqtk subseq \
+raw_reads/sample08_shorthead.fasta \
+contamination/sa8_clean.txt > raw_reads/sample08_clean.fasta
+
+seqtk subseq \
+raw_reads/sample09_shorthead.fasta \
+contamination/sa9_clean.txt > raw_reads/sample09_clean.fasta
+
+seqtk subseq \
+raw_reads/sample10_shorthead.fasta \
+contamination/sa10_clean.txt > raw_reads/sample10_clean.fasta
+
+seqtk subseq \
+raw_reads/sample11_shorthead.fasta \
+contamination/sa11_clean.txt > raw_reads/sample11_clean.fasta
+
+seqtk subseq \
+raw_reads/sample12_shorthead.fasta \
+contamination/sa12_clean.txt > raw_reads/sample12_clean.fasta
+```
+*DONE 26th Feb 2025*
+
+```{bash subsetting the fastqs}
+mamba activate seqtk_env
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes
+
+seqtk subseq \
+raw_reads/sample01.fastq \
+contamination/sa1_clean.txt > raw_reads/sample01_clean.fastq
+
+seqtk subseq \
+raw_reads/sample02.fastq \
+contamination/sa2_clean.txt > raw_reads/sample02_clean.fastq
+
+seqtk subseq \
+raw_reads/sample03.fastq \
+contamination/sa3_clean.txt > raw_reads/sample03_clean.fastq
+
+seqtk subseq \
+raw_reads/sample04.fastq \
+contamination/sa4_clean.txt > raw_reads/sample04_clean.fastq
+
+seqtk subseq \
+raw_reads/sample05.fastq \
+contamination/sa5_clean.txt > raw_reads/sample05_clean.fastq
+
+seqtk subseq \
+raw_reads/sample06.fastq \
+contamination/sa6_clean.txt > raw_reads/sample06_clean.fastq
+
+seqtk subseq \
+raw_reads/sample07.fastq \
+contamination/sa7_clean.txt > raw_reads/sample07_clean.fastq
+
+seqtk subseq \
+raw_reads/sample08.fastq \
+contamination/sa8_clean.txt > raw_reads/sample08_clean.fastq
+
+seqtk subseq \
+raw_reads/sample09.fastq \
+contamination/sa9_clean.txt > raw_reads/sample09_clean.fastq
+
+seqtk subseq \
+raw_reads/sample10.fastq \
+contamination/sa10_clean.txt > raw_reads/sample10_clean.fastq
+
+seqtk subseq \
+raw_reads/sample11.fastq \
+contamination/sa11_clean.txt > raw_reads/sample11_clean.fastq
+
+seqtk subseq \
+raw_reads/sample12.fastq \
+contamination/sa12_clean.txt > raw_reads/sample12_clean.fastq
+```
+*DONE 26th Feb 2025*
+
+For Subbaromyces splendans just doing *trim_galore* as its short reads, and it was a pure culture. 
+
+```{bash trim galore for subspl}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=15G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=trimgalore
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_genomes/trimming/trim.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_genomes/trimming/trim.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate trimgalore_env
+
+cd /scratch/alpine/beyo2625/laboul_genomes
+
+trim_galore \
+--fastqc \
+--basename subbsple \
+--output_dir trimming \
+--paired \
+raw_reads/subspl/S5_CKDN230035298-1A_HGC5CDSX7_L3_1.fq.gz \
+raw_reads/subspl/S5_CKDN230035298-1A_HGC5CDSX7_L3_2.fq.gz
+```
+*DONE 24th Feb 2025*
+
+
+## 5. Quality Filtering and QC
+
+`chopper` and `nanoplot` of the filtering
+
+```{bash chopper run}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --ntasks=2
+#SBATCH --cpus-per-task=1
+#SBATCH --job-name=chopper_loop
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/chopper_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/chopper_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+echo "Files undergoing filtering"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --qos=blanca-qsmicrobes' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --partition=blanca-qsmicrobes' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --account=blanca-qsmicrobes' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --time=12:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --mem=20G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --job-name='"$PALPAL"'_chop' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/'"$PALPAL"'_chop.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/'"$PALPAL"'_chop.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo 'conda activate chopper_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+
+echo 'chopper \
+--quality 8 \
+--minlength 250 \
+--threads 10 \
+--input /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/'"${PALPAL}"'_clean.fastq\
+> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/'"${PALPAL}"'_clean.fastq' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/loop_err_out/"$PALPAL"_chop.sh
+done
+```
+*DONE 7th Feb 2025*
+
+```{bash running nanoplot}
+#!/bin/bash
+#SBATCH --time=02:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=20G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=nanoplot
+#SBATCH --error=/scratch/alpine/beyo2625/antarctica_genomes/nanoplot_qc/filtered_demux/nanoplot_qc.err
+#SBATCH --output=/scratch/alpine/beyo2625/antarctica_genomes/nanoplot_qc/filtered_demux/nanoplot_qc.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)" 
+conda activate nanoplot_env
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+cd /scratch/alpine/beyo2625/antarctica_genomes
+
+NanoPlot \
+-t 10 \
+-o nanoplot_qc/filtered_demux \
+--tsv_stats \
+--info_in_report \
+--fastq clean_reads/*.fastq
+```
+*NOT DONE 7th Feb 2025*
+
+
+## 4. Genome Size Estimation
+
+Using `lrge` for this 
+
+```{bash lrge script}
+#!/bin/bash
+#SBATCH --time=02:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=20G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=nanoplot
+#SBATCH --error=/scratch/alpine/beyo2625/antarctica_genomes/size_est/size_est.err
+#SBATCH --output=/scratch/alpine/beyo2625/antarctica_genomes/size_est/size_est.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)" 
+conda activate lrge_env
+
+export TMP=/scratch/alpine/beyo2625/temp_space
+export TEMP=/scratch/alpine/beyo2625/temp_space
+export TMPDIR=/scratch/alpine/beyo2625/temp_space 
+export TEMPDIR=/scratch/alpine/beyo2625/temp_space
+export temp_directory=/scratch/alpine/beyo2625/temp_space
+
+PALMATA=$(ls /scratch/alpine/beyo2625/antarctica_genomes/demux | grep -o '^barcode[0-9]*' | sort | uniq)
+
+cd /scratch/alpine/beyo2625/antarctica_genomes
+
+for PALPAL in $PALMATA
+do
+echo "Processing $PALPAL raw"
+lrge \
+--output /scratch/alpine/beyo2625/antarctica_genomes/size_est/"$PALPAL"_raw.txt \
+--temp /scratch/alpine/beyo2625/temp_space \
+--threads 5 \
+--seed 22 \
+/scratch/alpine/beyo2625/antarctica_genomes/demux/"$PALPAL"_final.fastq
+echo "Processing $PALPAL cleaned"
+lrge \
+--output /scratch/alpine/beyo2625/antarctica_genomes/size_est/"$PALPAL"_filt.txt \
+--temp /scratch/alpine/beyo2625/temp_space \
+--threads 5 \
+--seed 22 \
+/scratch/alpine/beyo2625/antarctica_genomes/clean_reads/"$PALPAL"_clean.fastq
+echo "$PALPAL finished"
+done
+```
+
+
+## 6. Genome Assembly and Polishing
+### 6.1 - Assembly with Flye
+
+So I did alot of testing and the `flye::meta` was the best results. But I have now recalled with `dorado` and SUP, and the most correct flag is therefore the *nano-hq*. 
+
+I will still use the `flye::meta` option, as this seemed to give better contiguity and results. 
+
+```{bash flye assembly in nano-hq mode}
+#!/bin/bash
+#SBATCH --time=01:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loopscript_flye_meta
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/flye_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/flye_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+echo "files being put into flye::meta assembly"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mem=50G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --ntasks=10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --job-name='"$PALPAL"'_flye_meta' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/'"$PALPAL"'_flye_meta.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/'"$PALPAL"'_flye_meta.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'conda activate flye_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'flye \
+--nano-hq /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/'"${PALPAL}"'_clean.fastq \
+--out-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/'"${PALPAL}"' \
+--threads 20 \
+--iterations 1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_meta_flye.sh
+done
+```
+
+```{bash flye assembly with nanohq and meta mode}
+#!/bin/bash
+#SBATCH --time=01:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loopscript_flye_meta
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/flye_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/flye_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+echo "files being put into flye::meta assembly"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mem=50G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --ntasks=10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --job-name='"$PALPAL"'_flye_meta' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/'"$PALPAL"'_flye_meta.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/'"$PALPAL"'_flye_meta.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'conda activate flye_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'flye \
+--nano-hq /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/'"${PALPAL}"'_clean.fastq \
+--out-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/'"${PALPAL}"' \
+--threads 20 \
+--meta \
+--iterations 1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_meta_flye.sh
+done
+```
+
+```{bash flye assembly with nanoraw and meta mode}
+#!/bin/bash
+#SBATCH --time=01:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loopscript_flye_meta
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/flye_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/flye_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+echo "files being put into flye::meta assembly"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mem=50G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --ntasks=10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --job-name='"$PALPAL"'_flye_meta_raw' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/'"$PALPAL"'_flye_meta_raw.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/'"$PALPAL"'_flye_meta_raw.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'conda activate flye_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+
+echo 'flye \
+--nano-raw /scratch/alpine/beyo2625/laboul_all/laboul_genomes/clean/'"${PALPAL}"'_clean.fastq \
+--out-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/'"${PALPAL}"' \
+--threads 20 \
+--meta \
+--iterations 1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/loop_err_out/"$PALPAL"_meta_flye.sh
+done
+```
+
+And also assembling the Subbaromyces splendans
+
+```{bash subspl genome assembly}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=15G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=spades_subspl
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_genomes/assembly/loop_err_out/spades_subspl.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_genomes/assembly/loop_err_out/spades_subspl.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate spades_env
+
+cd /scratch/alpine/beyo2625/laboul_genomes
+
+mkdir assembly/subspl
+
+spades.py \
+-1 trimming/subbsple_val_1.fq.gz \
+-2 trimming/subbsple_val_2.fq.gz \
+-t 40 \
+-m 200 \
+--tmp-dir /scratch/alpine/beyo2625/temp_space \
+-o assembly/subspl
+```
+*DONE 2024*
+
+
+### 6.2 - Polishing Nanopore Reads
+
+Using medaka here and two rounds (as we used `dorado` and SUP). 
+
+```{bash polishing the flye assemblies}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --partition=blanca-curc-gpu
+#SBATCH --qos=blanca-curc-gpu
+#SBATCH --account=blanca-curc-gpu
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --ntasks=2
+#SBATCH --cpus-per-task=1
+#SBATCH --job-name=medaka_loop
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/medaka_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/medaka_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+# making a list of sample names
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+echo "files being run in medaka"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --partition=blanca-curc-gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --qos=blanca-curc-gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --account=blanca-curc-gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --gres=gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --mem=40G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --job-name='"$PALPAL"'_medaka' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/'"$PALPAL"'_medaka.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/'"$PALPAL"'_medaka.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo 'conda activate medaka_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'medaka_consensus \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/'"${PALPAL}"'_clean.fastq \
+-d /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/'"${PALPAL}"'/assembly.fasta \
+-o /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/'"${PALPAL}"'/medaka_r1 \
+-m r1041_e82_400bps_sup_v5.0.0 \
+-t 10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'medaka_consensus \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/'"${PALPAL}"'_clean.fastq \
+-d /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/'"${PALPAL}"'/medaka_r1/consensus.fasta \
+-o /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/'"${PALPAL}"'/medaka_r2 \
+-m r1041_e82_400bps_sup_v5.0.0 \
+-t 10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/loop_err_out/"$PALPAL"_medaka.sh
+done
+```
+*DONE 28th Feb 2025*
+
+So from the 50 hour wall time samples *6, 10, and 12* do not complete. Of these 
+Sample 6 and 12 did not complete the first round of medaka 
+Sample 10 completed the first round of medaka
+
+Will resubmit these with the ful 186 wall time as I do not want to deal with the GPU installation. 
+
+Okay I am also going to try the pip install in a conda environment. LoL. - https://github.com/nanoporetech/medaka 
+
+```{bash medaka manual installation}
+mamba create -n medaka_env python=3.9
+
+## everything saving to ~ and to much space, changing the variable to make work betetr
+mamba activate medaka_env
+export TMPDIR=/scratch/alpine/beyo2625/temp_space
+PIP_CACHE_DIR=/scratch/alpine/beyo2625/temp_space
+pip install --no-cache-dir medaka
+
+mamba activate medaka_env
+mamba install samtools minimap2 tabix bcftools
+```
+*Done 3 March 2025*
+
+```{bash testing medaka manual}
+sinteractive \
+--partition=blanca-curc-gpu \
+--qos=blanca-curc-gpu \
+--account=blanca-curc-gpu \
+--gres=gpu:1 \
+-n 4 \
+--time=1:00:00
+
+mamba activate medaka_manual_env
+
+medaka_consensus \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/sample02_clean.fastq \
+-d /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample02/assembly.fasta \
+-o /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample02/medaka_r1 \
+-m r1041_e82_400bps_sup_v5.0.0 \
+-t 4
+```
+
+Okay so this now runs with GPU. 
+
+Everyting ran wayyyy quicker (40 mins versus 50 hours) bvut sample 2, 3, and 8 still seemed to fail. 
+
+I have dropped the threads down down for these and rerunning. 
+
+```{bash polishing the flye meta assemblies}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --partition=blanca-curc-gpu
+#SBATCH --qos=blanca-curc-gpu
+#SBATCH --account=blanca-curc-gpu
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --ntasks=2
+#SBATCH --cpus-per-task=1
+#SBATCH --job-name=medaka_loop
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/medaka_loop.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/medaka_loop.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+# making a list of sample names
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+echo "files being run in medaka"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --partition=blanca-curc-gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --qos=blanca-curc-gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --account=blanca-curc-gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --gres=gpu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --mem=40G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --job-name='"$PALPAL"'_medaka' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/'"$PALPAL"'_medaka.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/'"$PALPAL"'_medaka.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo 'conda activate medaka_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'medaka_consensus \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/'"${PALPAL}"'_clean.fastq \
+-d /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/'"${PALPAL}"'/assembly.fasta \
+-o /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/'"${PALPAL}"'/medaka_r1 \
+-m r1041_e82_400bps_sup_v5.0.0 \
+-t 10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+
+echo 'medaka_consensus \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads/'"${PALPAL}"'_clean.fastq \
+-d /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/'"${PALPAL}"'/medaka_r1/consensus.fasta \
+-o /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/'"${PALPAL}"'/medaka_r2 \
+-m r1041_e82_400bps_sup_v5.0.0 \
+-t 10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/loop_err_out/"$PALPAL"_medaka.sh
+done
+```
+
+
+## 7. Quality Control of Assembled Genomes
+### 7.1 - Quast
+
+```{bash flye assemblies}
+mamba activate quast_env
+quast \
+-t 4 \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample01/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample01/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample01/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample02/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample02/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample02/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample03/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample03/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample03/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample04/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample04/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample04/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample05/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample05/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample05/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample06/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample06/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample06/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample07/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample07/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample07/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample08/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample08/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample08/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample09/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample09/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample09/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample10/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample10/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample10/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample11/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample11/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample11/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample12/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample12/medaka_r1/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye/sample12/medaka_r2/consensus.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample01/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample02/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample03/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample04/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample05/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample06/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample07/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample08/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample09/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample10/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample11/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta/sample12/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample01/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample02/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample03/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample04/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample05/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample06/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample07/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample08/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample09/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample10/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample11/assembly.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/sample12/assembly.fasta \
+-o /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/asm_quast
+```
+*WRITTEN NOT RUN 28th Feb 2025*
+
+
+## 6. Repeat Modelling and Repeat Masking
+
+```{bash making conda environments for repet modeling and masking}
+mamba create -n repeatmask_env -c bioconda repeatmasker
+mamba create -n repeatmod_env -c bioconda repeatmodeler
+```
+*DONE 28th Feb 2025*
+
+```{bash repeat modelling for nanopore data}
+#!/bin/bash
+#SBATCH --time=01:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loop_rmodel
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/loop_rmodel.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/loop_rmodel.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names PXX
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+### FLYE BUSCO LOOP SCRIPT
+echo "repeat modelling the assemblies"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --mem=60G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --ntasks=10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --job-name='"$PALPAL"'_rmodel' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/'"$PALPAL"'_rmodel.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/'"$PALPAL"'_rmodel.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'conda activate repeatmod_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'mkdir '"${PALPAL}"'_rmodel' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+echo 'cd '"${PALPAL}"'_rmodel' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+
+echo 'BuildDatabase \
+-name '"${PALPAL}"'_db \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/'"${PALPAL}"'/assembly.fasta' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+
+echo 'RepeatModeler \
+-threads 20 \
+-LTRStruct \
+-database '"${PALPAL}"'_db >& '"${PALPAL}"'_run.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/loop_err_out/"$PALPAL"_rmodel.sh
+done
+```
+*DONE 25th March 2025*
+
+```{bash repeat modelling for subspl}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=15G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=rmodel_subspl
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_genomes/repeat_model/loop_err_out/subspl_rmodel.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_genomes/repeat_model/loop_err_out/subspl_rmodel.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate repeats_env
+
+cd /scratch/alpine/beyo2625/laboul_genomes/repeat_model
+mkdir subspl_rmodel
+cd subspl_rmodel
+
+BuildDatabase \
+-name subspl_db \
+/scratch/alpine/beyo2625/laboul_genomes/assembly/subspl/scaffolds.fasta
+
+RepeatModeler \
+-threads 20 \
+-LTRStruct \
+-database subspl_db >& subspl_run.out
+```
+*DONE 2024*
+
+```{bash repeatmasking script for nanopore}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loop_rmask
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/loop_rmask.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/loop_rmask.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names PXX
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+### FLYE BUSCO LOOP SCRIPT
+echo "repeatmasking for genomes"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --time=10:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --mem=60G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --ntasks=8' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --job-name='"$PALPAL"'_rmask' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/'"$PALPAL"'_rmask.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/'"$PALPAL"'_rmask.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'conda activate repeatmask_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'mkdir '"${PALPAL}"'_rmask' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'cd '"${PALPAL}"'_rmask' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'RepeatMasker \
+-pa 4 \
+-a \
+-gff \
+-no_is \
+-lib /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/'"${PALPAL}"'_rmodel/'"${PALPAL}"'_db-families.fa \
+-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/'"${PALPAL}"'_rmask/hard_mask \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/'"${PALPAL}"'/assembly.fasta &> '"${PALPAL}"'_RM.hard.run.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'RepeatMasker \
+-pa 16 \
+-a \
+-xsmall \
+-gff \
+-no_is \
+-lib /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_model/'"${PALPAL}"'_rmodel/'"${PALPAL}"'_db-families.fa \
+-dir /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/'"${PALPAL}"'_rmask/soft_mask \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/assembly/flye_meta_raw/'"${PALPAL}"'/assembly.fasta &> '"${PALPAL}"'_RM.soft.run.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/loop_err_out/"$PALPAL"_rmask.sh
+done
+```
+*DONE 24 March 2025*
+
+```{bash repeat modelling for subspl}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=15G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=spades_subspl
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_genomes/repeat_mask/loop_err_out/subspl_rmask.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_genomes/repeat_mask/loop_err_out/subspl_rmask.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate repeats_env
+
+cd /scratch/alpine/beyo2625/laboul_genomes/repeat_mask
+mkdir subspl_rmask
+cd subspl_rmask
+
+RepeatMasker \
+-pa 4 \
+-a \
+-gff \
+-no_is \
+-lib /scratch/alpine/beyo2625/laboul_genomes/repeat_model/subspl_rmodel/subspl_db-families.fa \
+-dir /scratch/alpine/beyo2625/laboul_genomes/repeat_mask/subspl_rmask/hard_mask \
+/scratch/alpine/beyo2625/laboul_genomes/assembly/subspl/scaffolds.fasta &> subspl_RM.hard.run.out
+
+RepeatMasker \
+-pa 16 \
+-a \
+-xsmall \
+-gff \
+-no_is \
+-lib /scratch/alpine/beyo2625/laboul_genomes/repeat_model/subspl_rmodel/subspl_db-families.fa \
+-dir /scratch/alpine/beyo2625/laboul_genomes/repeat_mask/subspl_rmask/soft_mask \
+/scratch/alpine/beyo2625/laboul_genomes/assembly/subspl/scaffolds.fasta &> subspl_RM.soft.run.out
+```
+*DONE 2024*
+
+
+## 7. Funannotate Installation
+### 7.1 - Funannotate
+
+```{bash making conda environmnet}
+mamba create -n funannotate_env -c bioconda funannotate
+```
+*DONE 28th Feb 2025*
+```
+For Linux 64, Open MPI is built with CUDA awareness but this support is disabled by default.
+To enable it, please set the environment variable OMPI_MCA_opal_cuda_support=true before
+launching your MPI processes. Equivalently, you can set the MCA parameter in the command line:
+mpiexec --mca opal_cuda_support 1 ...
+ 
+In addition, the UCX support is also built but disabled by default.
+To enable it, first install UCX (conda install -c conda-forge ucx). Then, set the environment
+variables OMPI_MCA_pml="ucx" OMPI_MCA_osc="ucx" before launching your MPI processes.
+Equivalently, you can set the MCA parameters in the command line:
+mpiexec --mca pml ucx --mca osc ucx ...
+Note that you might also need to set UCX_MEMTYPE_CACHE=n for CUDA awareness via UCX.
+Please consult UCX's documentation for detail.
+  
+All Users:
+  You will need to setup the funannotate databases using funannotate setup.
+  The location of these databases on the file system is your decision and the
+  location can be defined using the FUNANNOTATE_DB environmental variable.
+  
+  To set this up in your conda environment you can run the following:
+    echo "export FUNANNOTATE_DB=/your/path" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/activate.d/funannotate.sh
+    echo "unset FUNANNOTATE_DB" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/deactivate.d/funannotate.sh
+  
+  You can then run your database setup using funannotate:
+    funannotate setup -i all
+    
+  Due to licensing restrictions, if you want to use GeneMark-ES/ET, you will need to install manually:
+  download and follow directions at http://topaz.gatech.edu/GeneMark/license_download.cgi
+  ** note you will likely need to change shebang line for all perl scripts:
+    change: #!/usr/bin/perl to #!/usr/bin/env perl
+     
+      
+Mac OSX Users:
+  Augustus and Trinity cannot be properly installed via conda/bioconda at this time. However,
+  they are able to be installed manually using a local copy of GCC (gcc-8 in example below).
+
+  Install augustus using this repo:
+    https://github.com/nextgenusfs/augustus
+  
+  To install Trinity v2.8.6, download the source code and compile using GCC/G++:
+    wget https://github.com/trinityrnaseq/trinityrnaseq/releases/download/v2.8.6/trinityrnaseq-v2.8.6.FULL.tar.gz
+    tar xzvf trinityrnaseq-v2.8.6.FULL.tar.gz
+    cd trinityrnaseq-v2.8.6
+    make CC=gcc-8 CXX=g++-8
+    echo "export TRINITY_HOME=/your/path" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/activate.d/trinity.sh
+    echo "unset TRINITY_HOME" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/deactivate.d/trinity.sh    
+```
+
+```{bash making the funannoate db variable in the conda environment}
+mamba activate funannotate_env
+mamba env config vars list
+mamba env config vars set FUNANNOTATE_DB=/projects/beyo2625/dbs/funannotate
+echo "export FUNANNOTATE_DB=/projects/beyo2625/dbs/funannotate" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/activate.d/funannotate.sh
+echo "unset FUNANNOTATE_DB" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/deactivate.d/funannotate.sh
+mamba activate funannotate_env
+```
+*DONE 3rd March 2025*
+
+Download `genemark` from here - <http://topaz.gatech.edu/GeneMark/license_download.cgi>
+
+We want the `GeneMark-ES/ET/EP+ ver 4.72_lic` and the kernel version is 3.10
+
+```{bash supercomputer kernel version}
+uname -r
+##gives 3.10.0-1160.108.1.el7.x86_64
+```
+*DONE 28th Feb 2025*
+
+So we want - GeneMark-ES/ET/EP+ ver 4.72_lic - LINUX 64 kernel 3.10 - 5
+
+```{bash downloading the correct thing}
+http://exon.gatech.edu/GeneMark/gmes_instructions.html
+```
+*DONE 3rd March 2025*
+
+```{bash uplaoding and installing genemark}
+## on local
+cd /Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/bioinformatics/programs
+scp -r * beyo2625@login.rc.colorado.edu:/projects/beyo2625/miniforge3/envs/funannotate_env/opt
+
+## on SC
+cd /projects/beyo2625/miniforge3/envs/funannotate_env/opt
+tar -xzvf gmes_linux_64_4.tar.gz
+
+mamba activate funannotate_env
+mamba env config vars list
+mamba env config vars set GENEMARK_PATH=/projects/beyo2625/miniforge3/envs/funannotate_env/opt/gmes_linux_64_4
+echo "export GENEMARK_PATH=/projects/beyo2625/dbs/funannotate/opt/gmes_linux_64_4" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/activate.d/funannotate.sh
+echo "unset GENEMARK_PATH" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/deactivate.d/funannotate.sh
+mamba activate funannotate_env
+echo $GENEMARK_PATH
+mamba env config vars list
+
+rm -rf gmes_linux_64_4.tar.gz
+```
+*DONE 3rd March 2025*
+
+Also need to save the key file somewhere.
+
+```{bash and the gm_key thingy}
+cd /projects/beyo2625/miniforge3/envs/funannotate_env/opt
+
+gunzip gm_key_64.gz
+cp gm_key_64 ~/.gm_key
+cp gm_key_64 ~/.gm_key_64
+rm -rf gm_key_64
+```
+*DONE 3rd March 2025*
+
+Now we need to go into the `gmes_linux_64_4` and change all the shebang line for all perl scripts (`.pl`) from `!/usr/bin/perl` to `/usr/bin/env perl`.
+
+Can do with either the loop script or the change perl in the genemark folder.
+
+```{bash}
+/projects/beyo2625/miniforge3/envs/funannotate_env/opt/gmes_linux_64_4/change_path_in_perl_scripts.pl \
+'/usr/bin/env perl'
+
+/projects/beyo2625/miniforge3/envs/funannotate_env/opt/gmes_linux_64_4/check_install.bash
+```
+*DONE 3rd March 2025*
+Everything works with the check install script woop. 
+
+```{bash seeing if everyting is good}
+mamba activate funannotate_env
+funannotate check --show-versions
+```
+
+This shows
+- all `perl` modules installed 
+- all `python` packages installed 
+- All `6 environmental variables` are set
+- ERROR: emapper.py not installed
+-	ERROR: gmes_petap.pl not installed
+-	ERROR: signalp not installed
+
+```{bash putting gmes into the env path}
+mamba activate funannotate_env
+export PATH=/projects/beyo2625/miniforge3/envs/funannotate_env/opt/gmes_linux_64_4:$PATH
+
+mamba activate funannotate_env
+funannotate check --show-versions
+```
+*DONE 3rd March 2025* - All good
+
+We now need to install `signalp` and `eggnogmapper`
+
+```{bash installing eggnogmapper}
+mamba activate funannotate_env
+mamba install -c bioconda eggnog-mapper
+
+conda env config vars list
+conda env config vars set EGGNOG_DATA_DIR=/projects/beyo2625/dbs/eggnog_db
+
+echo "export EGGNOG_DATA_DIR=/projects/beyo2625/dbs/eggnog_db" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/activate.d/funannotate.sh
+echo "unset EGGNOG_DATA_DIR" > /projects/beyo2625/miniforge3/envs/funannotate_env/etc/conda/deactivate.d/funannotate.sh
+
+mamba activate funannotate_env
+conda env config vars list
+echo $EGGNOG_DATA_DIR
+
+download_eggnog_data.py
+download_eggnog_data.py -F -P -M -H
+
+mamba activate funannotate_env
+funannotate check --show-versions
+```
+*DONE 3rd March 2025* - All good
+
+```{bash setting everything up}
+mamba activate funannotate_env
+funannotate setup -i all
+## cancelled on the BUSco step
+
+funannotate setup -i all --update
+## ran this and it looks like everything installed and is correct
+```
+*DONE 3rd March 2025*
+
+```{bash}
+mamba activate funannotate_env
+funannotate check --show-versions
+```
+*DONE 3rd March 2025*
+
+```{bash}
+mamba activate funannotate_env
+mamba install repeatmodeler
+```
+*DONE 3rd March 2025* - installs repeatmasker as well :)
+
+Now doing `signalp` (4.1 specifically)
+<https://services.healthtech.dtu.dk/services/SignalP-6.0/>
+
+```{bash uploading and installing signalp}
+## local
+cd /Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/bioinformatics/programs
+scp signalp-4.1g.Linux.tar.gz \
+beyo2625@login.rc.colorado.edu:/projects/beyo2625/miniforge3/envs/funannotate_env/opt
+
+## supercomputer
+cd /projects/beyo2625/miniforge3/envs/funannotate_env/opt
+tar -xzvf signalp-4.1g.Linux.tar.gz
+export PATH=/projects/beyo2625/miniforge3/envs/funannotate_env/opt/signalp-4.1:$PATH
+rm -rf signalp-4.1g.Linux.tar.gz
+```
+*DONE 3rd March 2025*
+
+In the `signalp` executable need to save the - path to the program - temp file space.
+
+```{bash checking to see if singalp done properly}
+mamba activate funannotate_env
+funannotate check --show-versions
+```
+*DONE 3rd March 2025* - signalp is found but doesnt work so that is weird. 
+
+```{bash checking installation is allllllll good}
+#!/bin/bash
+#SBATCH --time=10:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=30G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=fun_test
+#SBATCH --error=/scratch/alpine/beyo2625/fun_test/fun_test.err
+#SBATCH --output=/scratch/alpine/beyo2625/fun_test/fun_test.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo26253467@colorado.edu
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate funannotate_env
+
+cd /scratch/alpine/beyo2625/fun_test
+funannotate \
+test \
+-t all \
+--cpus 10 \
+--debug
+```
+*DONE 3rd March 2025* - everything worked woooo
+
+
+### 7.2 - Interproscan
+
+<https://github.com/ebi-pf-team/interproscan> <https://interproscan-docs.readthedocs.io/en/latest/>
+
+```{bash installing interproscan}
+mamba create -n interproscan2_env -c conda-forge -c bioconda interproscan
+```
+
+Messages from program installation
+
+First time usage please README !!! The databases are huge and consequently not shipped within this installation. Please download and install the Databases manually by following the commands below:
+
+Commands: - See here for latest db available: <https://github.com/ebi-pf-team/interproscan> or <http://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/> - Set versions version_major=5.59 version_minor=91.0 CONDA_PREFIX=/the/path/to/your/interproscan/conda/env/
+
+a)  get the md5 of the databases wget <http://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/$%7Bversion_major%7D-$%7Bversion_minor%7D/interproscan-$%7Bversion_major%7D-$%7Bversion_minor%7D-64-bit.tar.gz.md5>
+b)  get the databases (with core because much faster to download) wget <http://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/$%7Bversion_major%7D-$%7Bversion_minor%7D/interproscan-$%7Bversion_major%7D-$%7Bversion_minor%7D-64-bit.tar.gz>
+c)  checksum md5sum -c interproscan-${version_major}-${version_minor}-64-bit.tar.gz.md5
+d)  untar gz tar xvzf interproscan-${version_major}-${version_minor}-64-bit.tar.gz
+e)  remove the sample DB bundled by default rm -rf \$CONDA_PREFIX/share/InterProScan/data/
+f)  copy the new db cp -r interproscan-${version_major}-${version_minor}/data \$CONDA_PREFIX/share/InterProScan/
+
+INFO: Phobius (licensed software), SignalP, SMART (licensed components) and TMHMM use licensed code and data provided by third parties. If you wish to run these analyses it will be necessary for you to obtain a licence from the vendor and configure your local InterProScan installation to use them. (see more information in \$CONDA_PREFIX/share/InterProScan/data/<db>)
+
+```{bash making variables for downloads}
+mamba activate interproscan2_env
+interproscan.sh --version
+```
+
+Gives `5.59-91.0`.
+
+```{bash}
+version_major=5.59
+version_minor=91.0
+CONDA_PREFIX=/projects/beyo2625/miniforge3/envs/interproscan_env
+```
+
+```{bash downloading data file for interproscan}
+#!/bin/bash
+#SBATCH --time=10:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=150G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=inter_download
+#SBATCH --error=/projects/beyo2625/inter_dl.err
+#SBATCH --output=/projects/beyo2625/inter_dl.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate interproscan2_env
+
+version_major=5.59
+version_minor=91.0
+CONDA_PREFIX=/projects/beyo2625/miniforge3/envs/interproscan_env
+
+cd /scratch/alpine/beyo2625
+
+# get the md5 of the databases
+wget http://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/${version_major}-${version_minor}/interproscan-${version_major}-${version_minor}-64-bit.tar.gz.md5
+# get the databases (with core because much faster to download)
+wget http://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/${version_major}-${version_minor}/interproscan-${version_major}-${version_minor}-64-bit.tar.gz
+# checksum
+md5sum -c interproscan-${version_major}-${version_minor}-64-bit.tar.gz.md5
+# untar gz
+tar xvzf interproscan-${version_major}-${version_minor}-64-bit.tar.gz
+# remove the sample DB bundled by default
+rm -rf $CONDA_PREFIX/share/InterProScan/data/*
+# copy the new db
+mv interproscan-${version_major}-${version_minor}/data/* $CONDA_PREFIX/share/InterProScan/data
+```
+
+Once this is done we will need to manage the licensed programs - <https://interproscan-docs.readthedocs.io/en/latest/ActivatingLicensedAnalyses.html>
+
+-   Phobius - <https://phobius.sbc.su.se/>
+-   SignalP - <http://www.cbs.dtu.dk/services/SignalP/>
+-   TMHMM - <http://www.cbs.dtu.dk/services/TMHMM/>
+
+I have archived these in the onedrive for easier access.
+
+May need to also edit the `interproscan.properties` is updated accordingly (location = /projects/beyo2625/miniforge3/envs/interproscan_env/share/InterProScan/interproscan.properties)
+
+```{bash tmhmm}
+cd /projects/beyo2625/miniforge3/envs/interproscan_env/share/InterProScan/bin/tmhmm/2.0c
+wget https://services.healthtech.dtu.dk/download/12e0556e-287a-4e20-b5de-19a92f3001c8/tmhmm-2.0c.Linux.tar.gz ## nb have to do all the info stuff and put link in here
+tar -xzvf tmhmm-2.0c.Linux.tar.gz
+cd tmhmm-2.0c
+mv * ../
+cd ..
+rm -r tmhmm-2.0c tmhmm-2.0c.Linux.tar.gz
+```
+
+Or if from onedrive
+
+```{bash}
+scp /Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/mary_ben_genome_sequencing/bioinformatics/license_programs/tmhmm/tmhmm-2.0c.Linux.tar.gz beyo2625@login.rc.colorado.edu:/projects/beyo2625/miniforge3/envs/interproscan2_env/share/InterProScan/bin/tmhmm/2.0c
+```
+
+Files required by InterProScan: 
+-bin/tmhmm/2.0c/decodeanhmm (/projects/beyo2625/miniforge3/envs/interproscan2_env/share/InterProScan/bin/tmhmm/2.0c/bin) 
+-data/tmhmm/2.0c/TMHMM2.0c.model (/projects/beyo2625/miniforge3/envs/interproscan2_env/share/InterProScan/bin/tmhmm/2.0c/lib)
+
+In config changed 
+`binary.tmhmm.path=${bin.directory}/tmhmm/2.0c/decodeanhmm` to `binary.tmhmm.path=${bin.directory}/tmhmm/2.0c/bin/decodeanhmm.Linux_x86_64` `tmhmm.model.path=${data.directory}/tmhmm/2.0c/TMHMM2.0c.model` to `tmhmm.model.path=${bin.directory}/tmhmm/2.0c/lib/TMHMM2.0.model`
+
+**NOTE** may need to specify `decodeanhmm.Linux_x86_64` instead of `decodeanhmm` in config file for our system.
+
+```{bash phobius}
+##have to scp upload this one to /projects/beyo2625/miniforge3/envs/interproscan2_env/share/InterProScan/bin/phobius/1.01
+tar -xzvf phobius101_linux.tgz
+cd phobius
+mv * ../
+cd ..
+rm -rf phobius phobius101_linux.tgz
+```
+
+or from onedrive
+
+```{bash}
+scp /Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/mary_ben_genome_sequencing/bioinformatics/license_programs/phobius/phobius101_linux.tgz beyo2625@login.rc.colorado.edu:/projects/beyo2625/miniforge3/envs/interproscan2_env/share/InterProScan/bin/phobius/1.01
+```
+
+Files required by InterProScan: 
+-bin/phobius/1.01/decodeanhmm 
+-bin/phobius/1.01/phobius.model 
+-bin/phobius/1.01/phobius.options 
+-bin/phobius/1.01/phobius.pl
+
+Just have to remove the 1.01 as they in the phobius folder not the subdirectory. Only thing in the interproscan.properties is the `-bin/phobius/1.01/decodeanhmm` so only one edited. 
+
+Also, in phobius.pl change the decode to the 64bit version
+https://github.com/ebi-pf-team/interproscan/issues/206
+
+```{bash signalp program}
+cd /projects/beyo2625/miniforge3/envs/interproscan2_env/share/InterProScan/bin/signalp/4.1
+wget https://services.healthtech.dtu.dk/download/f866239c-ef07-4185-93f6-1a7905db3459/signalp-4.1g.Linux.tar.gz
+tar -xzvf signalp-4.1g.Linux.tar.gz
+cd signalp-4.1
+mv * ../
+cd ../
+rm -rf signalp-4.1 signalp-4.1g.Linux.tar.gz
+```
+
+Or from one drive
+
+```{bash}
+scp /Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/mary_ben_genome_sequencing/bioinformatics/license_programs/signalp/signalp-4.1g.Linux.tar.gz beyo2625@login.rc.colorado.edu:/projects/beyo2625/miniforge3/envs/interproscan2_env/share/InterProScan/bin/signalp/4.1
+```
+
+bin/signalp/4.1/signalp 
+bin/signalp/4.1/bin/nnhowplayer.Linux_i386 
+bin/signalp/4.1/bin/nnhowplayer.Linux_i486 
+bin/signalp/4.1/bin/nnhowplayer.Linux_i586 
+bin/signalp/4.1/bin/nnhowplayer.Linux_i686 
+bin/signalp/4.1/bin/nnhowplayer.Linux_ia64 
+bin/signalp/4.1/bin/nnhowplayer.Linux_x86_64
+
+All these programs are in the correct place so we do not need to edit the config file.
+
+BUT, do need to edit the `signalp` binary to point to where the program is.
+
+Also need to make sure the signalp binary is pointing correct place so switch
+
+```
+BEGIN {
+    $ENV{SIGNALP} = '/usr/opt/www/pub/CBS/services/SignalP-4.1/signalp-4.1';
+}
+```
+to 
+```
+BEGIN {
+    $ENV{SIGNALP} = 'bin/signalp/4.1';
+}
+```
+
+Now testing, you should see all analyses are acivated in the output (i.e. no deactivated analyses at the end of this)
+
+```{bash checking to see all analyses avaliable}
+mamba activate interproscan_env
+interproscan.sh
+```
+
+Yay everything works woooooooooooo. Can now run it.
+
+Then run this to intialise everything (only needs to be done once)
+
+```{bash}
+cd /projects/beyo2625/miniforge3/envs/interproscan_env/share/InterProScan
+python3 setup.py interproscan.properties
+```
+
+Will be some problems <https://github.com/ebi-pf-team/interproscan/issues/280> <https://github.com/ebi-pf-team/interproscan/issues/232>
+
+To fix can do this
+
+<https://github.com/ebi-pf-team/interproscan/issues/305>
+
+```{bash }
+cd /projects/beyo2625/miniforge3/envs/interproscan_env/share/InterProScan
+
+for f in data/sfld/*/sfld.hmm data/superfamily/*/hmmlib_*[0-9]; do
+cp $f $f.bak;
+perl -lne '$_=~s/[\s\n]+$//g;if(/^(NAME|ACC) +(.*)$/){if(exists $d{$2}){$d{$2}+=1;$_.="-$d{$2}"}else{$d{$2}=0;}}print "$_"' $f > $f.tmp; mv $f.tmp $f;
+done
+```
+
+And then redoing this.
+
+```{bash}
+cd /projects/beyo2625/miniforge3/envs/interproscan_env/share/InterProScan
+python3 setup.py interproscan.properties
+```
+
+Okay so this looks like everything has worked . . . .
+
+Lets test it all out.
+
+```{bash}
+./interproscan.sh -i test_all_appl.fasta -f tsv -dp
+./interproscan.sh -i test_all_appl.fasta -f tsv
+./interproscan.sh -i test_all_appl.fasta -f tsv -dp -exclappl mobidb
+```
+
+Okay so `prosite` is being super weird. I am just going to remove this analysis.
+
+I tried doing this and then changing the `interproscan.properties` to just have these two programs
+
+```{bash}
+wget https://ftp.expasy.org/databases/prosite/ps_scan/ps_scan_linux_x86_elf.tar.gz
+tar -xzvf ps_scan_linux_x86_elf.tar.gz
+```
+
+```{bash}
+./interproscan.sh -i test_all_appl.fasta -f tsv -dp -exclappl prositepatterns,prositeprofiles
+./interproscan.sh -i test_all_appl.fasta -f tsv -exclappl prositepatterns,prositeprofiles
+```
+
+And this works so yay.
+
+So now we can finally use this in our `Interproscan` run before feeding this into `funannotate::annotate.`
+
+The final thing to do is to download the lookupservice for the version of interproscan we have. This is 1.2Tb of data. You do not really need this, but if you want this is how you would do it
+
+Fing the lookup service that matches your version of `interproscan` <https://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/>
+
+```{bash}
+wget https://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/5.59-91.0/lookup_service_5.59-91.0.tar.gz
+tar -xzvf lookup_service_5.59-91.0.tar.gz
+```
+
+Once this has been done update the `interproscan.properties` accordingly to point to the lookup service.
+
+Okay so can also just do with a singularity container so trying this 
+
+On supercomputer
+
+module purge
+module load singularity/3.7.4
+
+
+## 8. Funannotate
+### 8.1 - Cleaning for Funannotate
+
+```{bash cleaning all nanopore}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loop_clean
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/loop_cleansort.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/loop_cleansort.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names PXX
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+echo "cleaning and sorting for funannotate::predict"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --time=02:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --mem=20G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --job-name='"$PALPAL"'_cleansort' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/'"$PALPAL"'_cleansort.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/'"$PALPAL"'_cleansort.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'conda activate funannotate_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'mkdir '"${PALPAL}"'' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'cd '"${PALPAL}"'' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'funannotate \
+clean \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/repeat_mask/'"${PALPAL}"'_rmask/soft_mask/assembly.fasta.masked \
+-o '"${PALPAL}"'_sm_clean.fasta' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+
+echo 'funannotate \
+sort \
+-i '"${PALPAL}"'_sm_clean.fasta \
+-o '"${PALPAL}"'_sm_clean_sort.fasta \
+--minlen 400' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_rmask.sh
+done
+```
+*DONE 25th March 2025*
+**NB there was a weird errir with the sort command. Adding in the minlen recrified this and made it work corectly. See github topics for explanations. 
+
+
+### 8.2 - Genome QC after Cleaning
+#### 8.2.A - Quast 
+
+```{bash quast of the cleaned genomes for funannotate}
+mamba activate quast_env
+quast \
+-t 4 \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample01/sample01_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample02/sample02_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample03/sample03_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample04/sample04_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample05/sample05_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample06/sample06_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample07/sample07_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample08/sample08_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample09/sample09_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample10/sample10_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample11/sample11_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/sample12/sample12_sm_clean_sort.fasta \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Subbaromyces_splendens/Subbaromyces_splendens_pure_culture.scaffolds.fa \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_arvernensis/Pyxidiophora_arvernensis.scaffolds.fa \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_sp141/Pyxidiophora_sp141.scaffolds.fa \
+-o /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/fun_quast
+```
+
+
+#### 8.2.B - BUSCO
+
+```{bash looking at busco datasets}
+mamba activate busco_env
+busco --list-datasets
+```
+*DONE 28th Feb 2025*
+
+```{bash downloading databases}
+mamba acitvate busco_env
+busco --list-datasets
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db
+busco --download ascomycota_odb10 --out_path ./
+busco --download dothideomycetes_odb10 --out_path ./
+## can also downlaod all the other lineages for bacteria if needed. 
+```
+*DONE 28th Feb 2025*
+
+And running busco on the cleaned assemblies for the paper.
+
+```{bash busco script for ascomycota}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loop_busco
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/loop_busco.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/loop_busco.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names PXX
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+### FLYE BUSCO LOOP SCRIPT
+echo "flye::meta assemblies for busco"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --time=12:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --mem=180G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --ntasks=3' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --job-name='"$PALPAL"'_busco' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/'"$PALPAL"'_flye_busco.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/'"$PALPAL"'_flye_busco.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'conda activate busco_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'mkdir '"${PALPAL}"'' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/'"${PALPAL}"'/'"${PALPAL}"'_sm_clean_sort.fasta \
+-l ascomycota_odb10 \
+-o '"${PALPAL}"' \
+--mode genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 6' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco/loop_err_out/"$PALPAL"_flye_busco.sh
+done
+```
+*DONE 4th March 2025*
+
+```{bash busco script for dothido}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loop_busco
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/loop_busco.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/loop_busco.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names PXX
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/raw_reads
+PALMATA=$(ls sample*.fastq | sed -E 's/_.*|\.fastq//g' | sort -u)
+
+### FLYE BUSCO LOOP SCRIPT
+echo "medaka consensus asm with dothido"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --time=12:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --mem=180G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --ntasks=3' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --job-name='"$PALPAL"'_busco' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/'"$PALPAL"'_flye_busco.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/'"$PALPAL"'_flye_busco.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'conda activate busco_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+echo 'mkdir '"${PALPAL}"'' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+
+echo 'busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/'"${PALPAL}"'/'"${PALPAL}"'_sm_clean_sort.fasta \
+-l dothideomycetes_odb10 \
+-o '"${PALPAL}"' \
+--mode genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 6' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid/loop_err_out/"$PALPAL"_flye_busco.sh
+done
+```
+*DONE MAY 2025*
+
+```{bash busco for subspl with asco and dothid}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=180G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=spades_subspl
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/subspl_busco.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/subspl_busco.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate busco_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco
+mkdir subspl
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Subbaromyces_splendens/Subbaromyces_splendens_pure_culture.scaffolds.fa \
+-l ascomycota_odb10 \
+-o subspl \
+-m genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid
+mkdir subspl
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Subbaromyces_splendens/Subbaromyces_splendens_pure_culture.scaffolds.fa \
+-l dothideomycetes_odb10 \
+-o subspl \
+-m genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+```
+*DONE May 2025*
+
+```{bash busco for Pyxidiophora_arvernensis with asco and dothid}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=180G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=pyxiarv_busco
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxiarv_busco.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxiarv_busco.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate busco_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco
+mkdir pyxiarv
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_arvernensis/Pyxidiophora_arvernensis.scaffolds.fa \
+-l ascomycota_odb10 \
+-o pyxiarv \
+-m genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid
+mkdir pyxiarv
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_arvernensis/Pyxidiophora_arvernensis.scaffolds.fa \
+-l dothideomycetes_odb10 \
+-o pyxiarv \
+-m genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+```
+
+```{bash busco for Pyxidiophora_sp141 with asco and dothid}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=180G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=pyxspp_busco
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxspp_busco.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxspp_busco.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate busco_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco
+mkdir pyxispp
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_sp141/Pyxidiophora_sp141.scaffolds.fa \
+-l ascomycota_odb10 \
+-o pyxspp \
+-m genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid
+mkdir pyxspp
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_sp141/Pyxidiophora_sp141.scaffolds.fa \
+-l dothideomycetes_odb10 \
+-o pyxspp \
+-m genome \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+```
+
+### 8.2 - Funannotate Predict
+
+Now predicting proteins in the assemblies woooooop. 
+
+```{bash copying protein evidence}
+cp /pl/active/fungi1/Leotiomycetes/2022/Leo_prots.fas \
+/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate
+```
+*DONE 24 MARCH 2025*
+
+NOTES I was lazy so made the loop scripts, then put the species names in manually Same with the isolate information
+
+So for this remeber the barcodes to species.
+NP Run    Barcode   Tube Number   Species -> raname sample 
+1         BC1       3             Nycteromyces strebliduns (1699a) -> sample01
+1         BC2       4             Stigatomyces sp. (3960a) -> sample02
+1         BC3       5             Herpomyces sp. (3784a) -> sample03
+1         BC4       6             Laboulbenia bicornis (4333a) -> sample04
+1         BC5       7             Laboulbenia maixei (4197b) -> sample05
+2         BC6       8             Hesperomyces harmonie (5273b) -> sample06
+3         BC1       na            Herpomyces periplanetae (5868a) -> sample07
+3         BC2       na            Laboulbenia flagellata sl (5869a) -> sample08
+3         BC3       na            Rickia wasmannii (5870a) -> sample09
+3         BC4       na            Monoicomyces sp. (5611a) -> sample10
+3         BC5       na            Laboulbenia vulgaris sl (5727a) -> sample11
+3         BC6       na            Stigmatomyces trianguliapicalis (5733a) -> sample12   
+
+Also have
+Subbaromyces splendans        Whole genome sequencing PE 300bp
+
+```{bash adding in ascoymocat to funannotate database}
+mamba activate funannotate_env
+funannotate setup -b ascomycota
+```
+
+```{bash predict for genomes}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loop_funpred
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/fun_pred.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/fun_pred.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names SXX
+PALMATA=("sample01" "sample02" "sample03" "sample04" "sample05" "sample06" "sample07" "sample08" "sample09" "sample10" "sample11" "sample12")
+SPECIES=("Nycteromyces_streblidinus" "Stigatomyces_spp" "Herpomyces_spp" "Laboulbenia_bicornis" "Laboulbenia_maixei" "Hesperomyces_harmoniae" "Herpomyces_periplanetae" "Laboulbenia_flagellata" "Rickia_wasmannii" "Monoicomyces_spp" "Laboulbenia_vulgaris" "Stigmatomyces_trianguliapicalis")
+ISOLATE=("DH1699a" "DH3960a" "DH3784a" "DH4333a" "DH4197b" "DH5273b" "DH5868a" "DH5869a" "DH5870a" "DH5611a" "DH5727a" "DH5733a")
+NAME=("Nycstr1699a" "Stispp3960a" "Herspp3784a" "Labbic4333a" "Labmai4197b" "Heshar5273b" "Herper5868a" "Labfla5869a" "Ricwas5870a" "Monspp5611a" "Labvul5727a" "Stitri5733a")
+## DONE ABOVE EDITING
+
+echo "Running funnnotate::predict with sorted and cleaned soft masked genome assemblies"
+echo $PALMATA
+
+
+for i in "${!PALMATA[@]}"; do
+    PALPAL="${PALMATA[i]}"
+    SPE="${SPECIES[i]}"
+    ISO="${ISOLATE[i]}"
+    NAM="${NAME[i]}"
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --time=24:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --mem=50G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --job-name='"$PALPAL"'_predict' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/'"$PALPAL"'_funpred.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/'"$PALPAL"'_funpred.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo 'conda activate funannotate_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/'"${PALPAL}"'' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+echo 'funannotate \
+predict \
+-i '"${PALPAL}"'_sm_clean_sort.fasta \
+-o '"${PALPAL}"'_predict \
+-s '"${SPE}"' \
+--isolate '"${ISO}"' \
+--name '"${NAM}"' \
+--augustus_species botrytis_cinerea \
+--protein_evidence /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Leo_prots.fas \
+--optimize_augustus \
+--busco_db ascomycota \
+--organism fungus \
+--ploidy 1 \
+--keep_evm \
+--cpus 10 \
+--tmpdir /scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/loop_err_out/"$PALPAL"_funpred.sh
+done
+```
+*DONE 25th March 2025*
+*RUN ALL APART FROM SAMPLE08 and SAMPLE12*. 
+
+Samples that fail due too to many contigs and not being contiguous. These were all bad to start with so not suprising. 
+- sample 2
+- sample 4
+- sample 5 
+
+
+## 9. Protein BUSCO
+
+So have the protein fastas from `funannotate::predict`, lets see how they do in a BUSCO protein analysis. 
+
+```{bash busco script}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=1G
+#SBATCH --job-name=loop_protbusco
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/loop_protbusco.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/loop_protbusco.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+## making the list of sample names PXX
+PALMATA=("sample01" "sample02" "sample03" "sample04" "sample05" "sample06" "sample07" "sample08" "sample09" "sample10" "sample11" "sample12")
+SPECIES=("Nycteromyces_streblidinus_DH1699a" "Stigatomyces_spp_DH3960a" "Herpomyces_spp_DH3784a" "Laboulbenia_bicornis_DH4333a" "Laboulbenia_maixei_DH4197b" "Hesperomyces_harmoniae_DH5273b" "Herpomyces_periplanetae_DH5868a" "Laboulbenia_flagellata_DH5869a" "Rickia_wasmannii_DH5870a" "Monoicomyces_spp_DH5611a" "Laboulbenia_vulgaris_DH5727a" "Stigmatomyces_trianguliapicalis_DH5733a")
+
+
+### FLYE BUSCO LOOP SCRIPT
+echo "protein fastas from funannoattae::predict for busco"
+echo $PALMATA
+
+for i in "${!PALMATA[@]}"; do
+    PALPAL="${PALMATA[i]}"
+    SPE="${SPECIES[i]}"
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --time=16:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --mem=100G' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --ntasks=10' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --job-name='"$PALPAL"'_protbusco' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/'"$PALPAL"'_busco_prot.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/'"$PALPAL"'_busco_prot.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'conda activate busco_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+
+echo 'export TMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'export TEMP=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'export TMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'export TEMPDIR=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'export temp_directory=/scratch/alpine/beyo2625/temp_space' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco_prot' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'mkdir '"${PALPAL}"'' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'busco \
+-m prot \
+-l ascomycota_odb10 \
+--offline \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/'"${PALPAL}"'/'"${PALPAL}"'_predict/predict_results/'"${SPE}"'.proteins.fa \
+-o '"${PALPAL}"' \
+-c 20 \
+--metaeuk \
+-f' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid_prot' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'mkdir '"${PALPAL}"'' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+echo 'busco \
+-m prot \
+-l dothideomycetes_odb10 \
+--offline \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/'"${PALPAL}"'/'"${PALPAL}"'_predict/predict_results/'"${SPE}"'.proteins.fa \
+-o '"${PALPAL}"' \
+-c 20 \
+--metaeuk \
+-f' >> /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/"$PALPAL"_busco_prot.sh
+done
+```
+*DONE 26th March 2025*
+
+*Sample 2,4, and 5* fail as funannotate predict did not work and thus no proteomes generated. 
+ 
+```{bash busco protein for subspl with asco and dothid}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=180G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=subspl_busco_prot
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/subspl_busco_prot.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/subspl_busco_prot.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate busco_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco_prot
+mkdir subspl
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Subbaromyces_splendens/Subbaromyces_splendens_pure_culture.proteins.fa \
+-l ascomycota_odb10 \
+-o subspl \
+-m prot \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid_prot
+mkdir subspl
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Subbaromyces_splendens/Subbaromyces_splendens_pure_culture.proteins.fa \
+-l dothideomycetes_odb10 \
+-o subspl \
+-m prot \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+```
+*DONE May 2025*
+
+```{bash busco protein for Pyxidiophora_arvernensis with asco and dothid}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=180G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=pyxiarv_busco_prot
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxiarv_busco_prot.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxiarv_busco_prot.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate busco_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco_prot
+mkdir pyxiarv
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_arvernensis/Pyxidiophora_arvernensis.proteins.fa \
+-l ascomycota_odb10 \
+-o pyxiarv \
+-m prot \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid_prot
+mkdir pyxiarv
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_arvernensis/Pyxidiophora_arvernensis.proteins.fa \
+-l dothideomycetes_odb10 \
+-o pyxiarv \
+-m prot \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+```
+
+```{bash busco protein for Pyxidiophora_sp141 with asco and dothid}
+#!/bin/bash
+#SBATCH --time=08:00:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=180G
+#SBATCH --ntasks=5
+#SBATCH --cpus-per-task=2
+#SBATCH --job-name=pyxspp_busco_prot
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxspp_busco_prot.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/loop_err_out/pyxspp_busco_prot.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+module purge
+eval "$(conda shell.bash hook)"
+conda activate busco_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_asco_prot
+mkdir pyxispp
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_sp141/Pyxidiophora_sp141.proteins.fa \
+-l ascomycota_odb10 \
+-o pyxspp \
+-m prot \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_dothid_prot
+mkdir pyxspp
+
+busco \
+-i /scratch/alpine/beyo2625/laboul_all/laboul_genomes/funannotate/Pyxidiophora_sp141/Pyxidiophora_sp141.proteins.fa \
+-l dothideomycetes_odb10 \
+-o pyxspp \
+-m prot \
+--offline \
+--metaeuk \
+--download_path /scratch/alpine/beyo2625/laboul_all/laboul_genomes/genome_qc/busco_db/busco_downloads \
+-f \
+--cpu 10
+```
