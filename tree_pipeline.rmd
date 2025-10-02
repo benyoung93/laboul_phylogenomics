@@ -1,0 +1,2002 @@
+---
+title: "laboul_ortholog_analysis"
+output: html_document
+date: "2024-09-25"
+---
+
+So while `orthofinder` is great, it is hard to parameterise for alot of protein files to run in the time frame needed. As such, doing a slightly different method. 
+We will have 2 analysis
+  A) This will be labouls with a load of classes. 
+  B) Labouls with Dothidiomycetes only to really place in the correct place. 
+
+For both we will be doing both of these pipelines. 
+
+1. Downloading all proteomes
+2. Renaming all files so it is easier to work with
+3. Running `proteinortho6` to identify orthologs
+4. Extracting single copy orthologus clusters
+5. Run `muscle5` on all orthologous clusters and make alignments
+6. Run `trimal` to clean alignments up. 
+7. Create an expected file and concatenate all aligned files. 
+8. Run `RAxML`. 
+
+## A) Labouls and different classes 
+### A.1 - Downloading all proteomes
+
+For this we have our Laboul genomes from me and Warre, and some from Lazlo. 
+NP Run    Barcode   Tube Number   Species -> raname sample    Using?
+1         BC1       3             Nycteromyces strebliduns (1699a) -> sample1   *YES*
+1         BC2       4             Stigatomyces sp. (3960a) -> sample2   *NO*
+1         BC3       5             Herpomyces sp. (3784a) -> sample3   *NO*
+1         BC4       6             Laboulbenia bicornis (4333a) -> sample4   *NO*
+1         BC5       7             Laboulbenia maixei (4197b) -> sample5   *NO*
+2         BC6       8             Hesperomyces harmonie (5273b) -> sample6    *YES*
+3         BC1       na            Herpomyces periplanetae (5868a) -> sample7    *YES*
+3         BC2       na            Laboulbenia flagellata sl (5869a) -> sample8    *NO*
+3         BC3       na            Rickia wasmannii (5870a) -> sample9   *YES*
+3         BC4       na            Monoicomyces sp. (5611a) -> sample10    *YES*
+3         BC5       na            Laboulbenia vulgaris sl (5727a) -> sample11   *YES*
+3         BC6       na            Stigmatomyces trianguliapicalis (5733a) -> sample12   *YES*  
+
+- Subberomyces splendans Ben *YES*
+- Pyxidophora sp. (141A) Lazlo *YES*
+- Chalara hyalina Lazlo *YES*
+- Pyxidiophora arvernensis Lazlo *YES*
+*DONE 15th September 2025*
+
+Note 3rd April 2025 - Rickia wasmannii (5870a) was removed as it has high yeast contamination. Sad. 
+
+And we have the proteomes for the other in the class in the *protein_fastas* folder.  
+
+
+### A.2 - Renaming
+
+Files have inconsistent names so renaming everything so it is consistent (because I am OCD).
+
+```{bash main renaming}
+for file in *.fa*; do
+    # Step 1: Remove 'GeneCatalog_proteins_xxxxxx'
+    new_name=$(echo "$file" | sed 's/GeneCatalog_proteins_[0-9]\{6,8\}//')
+    
+    # Step 2: Remove 'prot' and 'proteins'
+    new_name=$(echo "$new_name" | sed 's/_prot//g; s/_proteins//g')
+    
+    # Step 3: Ensure filenames end with '.aa.fasta'
+    new_name=$(echo "$new_name" | sed 's/.fasta$//; s/.fa$//')
+    new_name="${new_name}.aa.fasta"
+    
+    # Rename the file
+    mv "$file" "$new_name"
+done
+```
+*DONE 15th September 2025*
+
+So some underscores left and also some .aa.aa, quick script to fix those
+
+```{bash secondry fix}
+for file in *.fa*; do
+    # Step 1: Remove '_' only if followed by '.aa'
+    new_name=$(echo "$file" | sed 's/_\.aa/.aa/g')
+    
+    # Step 2: Replace '.aa.aa' with '.aa'
+    new_name=$(echo "$new_name" | sed 's/\.aa\.aa/\.aa/g')
+    
+    # Rename the file
+    mv "$file" "$new_name"
+done
+```
+*DONE 15th September 2025*
+
+There are a few with weird names still, so fixing these so that can use the script to name the proteins after the filename. 
+
+```{bash renaming last few weird files}
+mv Chalara_hyalina.aa.fasta Chahya.aa.fasta
+mv Geoglossum_cookeanum.proteins.aa.fasta Geocook.aa.fasta
+mv Herpomyces_periplanetae_DH5868a.proteins.aa.fasta HerpperiDH5868a.aa.fasta
+mv Hesperomyces_harmoniae_DH5273b.proteins.aa.fasta Hespharm5273b.aa.fasta
+mv Laboulbenia_vulgaris_DH5727a.proteins.aa.fasta Labovulg5727a.aa.fasta
+mv Monoicomyces_spp_DH5611a.proteins.aa.fasta Monospp5611a.aa.fasta
+mv Nycteromyces_streblidinus_DH1699a.proteins.aa.fasta Nyctstreb1699a.aa.fasta
+mv Pyxidiophora_arvernensis.proteins.aa.fasta Pyxiarv.aa.fasta
+mv Pyxidiophora_sp141.proteins.aa.fasta Pyxisp141a.aa.fasta
+mv Subbaromyces_splendens_pure_culture.proteins.aa.fasta Subbsplen.aa.fasta
+mv Stigmatomyces_trianguliapicalis_DH5733a.proteins.aa.fasta Stigtria5733a.aa.fasta
+mv Herpomyces_periplantae_1187d.proteins.fa HerpperiDH1187d.aa.fasta
+```
+*DONE 15th September 2025*
+
+Wunderbar, so all proteomes I am now renaming the proteins with the beginning of the fasta and sequential numbers. 
+
+```{bash renaming all the proteins}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/protein_fastas
+for file in *.fasta; do
+    base=$(basename "$file" | cut -d. -f1) # Get the base name without extension
+    awk -v prefix="${base}_" '{
+        if (substr($0, 1, 1) == ">") {
+            count++
+            # Create the new header format with sequential numbering
+            printf(">%s%d|\n", prefix, count)
+        } else {
+            print $0
+        }
+    }' "$file" > ../modified_prot_fastas/"${file}.modified" # Output to a new file with .modified suffix
+done
+```
+*DONE 15th September 2025*
+
+Woooo all done and looks good. 
+
+Lol joke one more thing, need to remove all * from the amino acid sequences
+
+```{bash getting rid of any stars in the protein sequences}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/modified_prot_fastas
+for file in *.fasta.modified; do
+    # Use sed to remove '*' at the end of sequences (non-header lines)
+    sed -i 's/\([A-Z]*\)\*/\1/g' "$file"
+done
+```
+*DONE 15th September 2025*
+
+
+### A.2 - Identyfying Orthologous Gene Clusters
+
+```{bash running protein ortho}
+#!/bin/bash
+#SBATCH --time=24:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=40G
+#SBATCH --job-name=protortho
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/prot_ortho/protortho.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/prot_ortho/protortho.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=10
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate proteinortho_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/prot_ortho
+
+proteinortho6.pl \
+-project=laboul_tree \
+-cpus=20 \
+--temp=/scratch/alpine/beyo2625/temp_space \
+../modified_prot_fastas/*.modified
+```
+*DONE 15th September 2025*
+Job ID: 9137299
+Cluster: alpine
+User/Group: beyo2625/beyo2625pgrp
+State: COMPLETED (exit code 0)
+Nodes: 1
+Cores per node: 26
+CPU Utilized: 07:59:24
+CPU Efficiency: 57.41% of 13:55:02 core-walltime
+Job Wall-clock time: 00:32:07
+Memory Utilized: 663.62 MB
+Memory Efficiency: 0.65% of 100.00 GB
+
+
+### A.3 - Extracting Single Copy Orthologues. 
+
+How many proteomes do we have total. 
+
+```{bash identyfying how many proteomes we have}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/protein_fastas
+ls *.fasta | wc -l
+```
+*DONE 15th September 2025*
+
+So we have 69, we need to then extract the 69th column from the `proteinortho` results for SCO in all species. 
+
+```{bash getting SCO from the protein ortho results}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/prot_ortho
+grep $'^69\t69' laboul_tree.proteinortho.tsv > SCO_all.tsv
+wc -l SCO*
+```
+*DONE 15th September 2025*
+
+That gives 8, so we have 8 single copy orthologs to build a tree with. Not ideal. 
+
+Working out some percentages here
+
+```{r working out percentages}
+(69/100) * 95
+(69/100) * 90
+(69/100) * 85
+(69/100) * 80
+(69/100) * 70
+(69/100) * 60
+(69/100) * 50
+```
+
+```{bash SCOs in at least 90 percent of species}
+awk '$1 == $2 && $1 > 65' laboul_tree.proteinortho.tsv > SCO_great65.txt
+awk '$1 == $2 && $1 > 62' laboul_tree.proteinortho.tsv > SCO_great62.txt
+awk '$1 == $2 && $1 > 58' laboul_tree.proteinortho.tsv > SCO_great58.txt
+awk '$1 == $2 && $1 > 55' laboul_tree.proteinortho.tsv > SCO_great55.txt
+awk '$1 == $2 && $1 > 48' laboul_tree.proteinortho.tsv > SCO_great48.txt
+awk '$1 == $2 && $1 > 41' laboul_tree.proteinortho.tsv > SCO_great41.txt
+awk '$1 == $2 && $1 > 34' laboul_tree.proteinortho.tsv > SCO_great34.txt
+wc -l SCO*
+```
+*DONE 15th September 2025*
+
+90% - greater 62 species, SCOs is 836
+85% - greater 58 species, SCOs is 1,310
+80% - greater 55 species, SCOs is 1,613
+70% - greater 48 species, SCOs is 2,157
+60% - greater 41 species, SCOs is 2,525
+50% - greater 34 species, SCOs is 2,760
+
+  8 SCO_all.tsv
+   2788 SCO_great34.txt
+   2542 SCO_great41.txt
+   2168 SCO_great48.txt
+   1623 SCO_great55.txt
+   1339 SCO_great58.txt
+    836 SCO_great62.txt
+  11304 total
+
+So lets keep 95% and 90% of the SCOs then. 
+
+```{bash 95 percent SCOs}
+#!/bin/bash
+#SBATCH --time=12:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=50G
+#SBATCH --job-name=grabprots_90perc
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g95/grabprots_95perc.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g95/grabprots_95perc.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=10
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate proteinortho_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree
+proteinortho_grab_proteins.pl \
+-exact \
+-cpus=20 \
+-tofiles=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g95 \
+prot_ortho/SCO_great65.txt \
+modified_prot_fastas/*.aa.fasta.modified
+```
+
+
+Using the >90% (826 SCOs)
+
+```{bash 90 percent SCOs}
+#!/bin/bash
+#SBATCH --time=12:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=50G
+#SBATCH --job-name=grabprots_90perc
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g90/grabprots_90perc.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g90/grabprots_90perc.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=10
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate proteinortho_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree
+proteinortho_grab_proteins.pl \
+-exact \
+-cpus=20 \
+-tofiles=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g90 \
+prot_ortho/SCO_great62.txt \
+modified_prot_fastas/*.aa.fasta.modified
+```
+*DONE 15th September 2025*
+
+
+### A.4 - Alignment 
+
+Now aligning all the orthogroups with `muscle5`. 
+
+I also had to switch some to `-super9` as they took 12 hours to align. 
+
+```{bash alining only SCOs in 95 percent or greater}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --partition=amilan
+#SBATCH --qos=normal
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --job-name=muscle
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/muscle.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/muscle.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g95
+PALMATA=$(ls *.fasta)
+
+echo "files going through mucle5 alignment"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --partition=amilan' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --qos=normal' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --time=12:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mem=10G' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --job-name='"$PALPAL"'_muscle' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/'"$PALPAL"'_muscle.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/'"$PALPAL"'_muscle.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+echo 'conda activate muscle_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'muscle \
+-super5 ortho_proteins_g95/'"${PALPAL}"' \
+-output align_g95/'"${PALPAL}"'.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95/loop_err_out/"$PALPAL"_muscle.sh
+done
+```
+*ON SUPERCOMPUTER 16th September 2025*
+
+```{bash alining only SCOs in 90 percent or greater}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --account=ucb423_asc2
+#SBATCH --partition=amilan
+#SBATCH --qos=normal
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --job-name=muscle
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/muscle.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/muscle.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/ortho_proteins_g90
+PALMATA=$(ls *.fasta)
+
+echo "files going through mucle5 alignment"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --partition=amilan' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --qos=normal' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --time=12:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mem=10G' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --job-name='"$PALPAL"'_muscle' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/'"$PALPAL"'_muscle.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/'"$PALPAL"'_muscle.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo 'conda activate muscle_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'muscle \
+-super5 ortho_proteins_g90/'"${PALPAL}"' \
+-output align_g90/'"${PALPAL}"'.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90/loop_err_out/"$PALPAL"_muscle.sh
+done
+```
+*DONE 15th September 2025*
+
+```{bash checking to make sure all files processed}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95
+ls *.out | wc -l
+## should be, 370, it is yay
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90
+ls *.out | wc -l
+## should be, 836, it is yay
+```
+*DONE 15th September 2025*
+
+
+### A.5 - Cleaning alignments
+
+```{bash great 95 percent trimal}
+mamba activate trimal_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95
+PALMATA=$(ls *.out)
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree
+
+for PALPAL in $PALMATA
+do
+trimal \
+-in align_g95/"$PALPAL" \
+-out align_clean_g95/"$PALPAL".trim \
+-gappyout
+done
+```
+*WRITTEN NOT RUN 16th September 2025*
+
+```{bash great 90 percent trimal}
+mamba activate trimal_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90
+PALMATA=$(ls *.out)
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree
+
+for PALPAL in $PALMATA
+do
+trimal \
+-in align_g90/"$PALPAL" \
+-out align_clean_g90/"$PALPAL".trim \
+-gappyout
+done
+```
+*DONE 15th September 2025*
+
+```{bash checking all fastas present}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_clean_g95
+ls *.trim | wc -l
+## gives 370 yay
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_clean_g90
+ls *.trim | wc -l
+## gives 836 yay
+```
+*DONE 15th September 2025*
+
+
+### A.6 - Creating the expected file or something 
+
+```{bash making expected file}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_clean_g90
+cat *.fasta.out.trim | grep "^>" | tr "_" "\t" | cut -f 1 | sort | uniq > ../expected.txt
+wc -l expected.txt
+## should give number of species involved, we have 69 and it gives 69 so yay.
+## can use this for g95 and g90 yay. 
+```
+*DONE 15th September 2025*
+
+*NB* need to edit the Piehol and PleMxxx to remove the _1 here. Did manually. 
+
+Before concatenating we need to complete the entries which did not have any genes. 
+
+```{bash making the 105 species list}
+# Create a list of all species
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree
+ls modified_prot_fastas/*.aa.fasta.modified | sed 's|modified_prot_fastas/||; s|\.aa\.fasta\.modified||' > species_list.txt
+wc -l species_list.txt ##gives 69 yay
+```
+*DONE 15th September 2025*
+
+```{bash removing the _1 bits in the two files in clean and comp}
+## for g95
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g95
+for file in *fasta.out; do
+    sed -i -E 's/^>(Pieho1)_1_/>\1_/; s/^>(PlePMI138)_1_/>\1_/' "$file"
+done
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_clean_g95
+for file in *fasta.out.trim; do
+    sed -i -E 's/^>(Pieho1)_1_/>\1_/; s/^>(PlePMI138)_1_/>\1_/' "$file"
+done
+
+## for g90
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_g90
+for file in *fasta.out; do
+    sed -i -E 's/^>(Pieho1)_1_/>\1_/; s/^>(PlePMI138)_1_/>\1_/' "$file"
+done
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_clean_g90
+for file in *fasta.out.trim; do
+    sed -i -E 's/^>(Pieho1)_1_/>\1_/; s/^>(PlePMI138)_1_/>\1_/' "$file"
+done
+```
+*DONE 16th September 2025*
+
+```{bash completing the orthogroups so all species present with padding sequences g95}
+# Path to required things
+species_file="/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/species_list.txt"
+orthogroup_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_clean_g95"
+output_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_comp_g95"
+line_length=60
+
+for orthogroup in "$orthogroup_dir"/*.out.trim; do
+    echo "Processing $orthogroup"
+    
+    # Extract existing species from the orthogroup file
+    existing_species=$(grep ">" "$orthogroup" | sed 's/>//; s/_.*//')
+
+    # Read species into an array
+    readarray -t all_species < "$species_file"
+
+    # Create an array to hold missing species
+    missing_species=()
+
+    # Identify missing species
+    for species in "${all_species[@]}"; do
+        if ! printf '%s\n' "${existing_species[@]}" | grep -q "^$species$"; then
+            missing_species+=("$species")
+        fi
+    done
+
+    # Get the maximum length of sequences in the orthogroup
+    max_length=0
+    current_length=0
+    while read -r line; do
+        if [[ "$line" == \>* ]]; then
+            if (( current_length > max_length )); then
+                max_length=$current_length
+            fi
+            current_length=0  # Reset for next sequence
+        else
+            current_length=$((current_length + ${#line}))
+        fi
+    done < "$orthogroup"
+
+    # Check the last sequence's length
+    if (( current_length > max_length )); then
+        max_length=$current_length
+    fi
+
+    # Create a new file path for the modified orthogroup
+    output_file="$output_dir/$(basename "$orthogroup")"
+
+    # Copy the original orthogroup content to the new file
+    cp "$orthogroup" "$output_file"
+
+    # Add missing species to the new orthogroup file
+    for species in "${missing_species[@]}"; do
+        echo "Adding missing species: $species"
+        # Add species header
+        echo ">${species}_00|" >> "$output_file"
+        
+        # Create the padded sequence with dashes
+        padding=$(printf '%*s' "$max_length" | tr ' ' '-')
+
+        # Split the padded sequence into lines of 60 characters
+        while [ -n "$padding" ]; do
+            echo "${padding:0:60}" >> "$output_file"
+            padding="${padding:60}"
+        done
+    done
+done
+```
+*DONE 16th September 2025*
+
+Now just testing a few to make sure everything looks good
+
+```{bash shows whether all the sequences are the same length for each orthogroup g95}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_comp_g95
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat65.txt.OrthoGroup344.fasta.out.trim
+## all the same
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat65.txt.OrthoGroup169.fasta.out.trim
+## all the same
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat65.txt.OrthoGroup24.fasta.out.trim
+## all the same
+```
+*DONE 16th September 2025*
+
+```{bash completing the orthogroups so all species present with padding sequences g90}
+# Path to required things
+species_file="/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/species_list.txt"
+orthogroup_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_clean_g90"
+output_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_comp_g90"
+line_length=60
+
+for orthogroup in "$orthogroup_dir"/*.out.trim; do
+    echo "Processing $orthogroup"
+    
+    # Extract existing species from the orthogroup file
+    existing_species=$(grep ">" "$orthogroup" | sed 's/>//; s/_.*//')
+
+    # Read species into an array
+    readarray -t all_species < "$species_file"
+
+    # Create an array to hold missing species
+    missing_species=()
+
+    # Identify missing species
+    for species in "${all_species[@]}"; do
+        if ! printf '%s\n' "${existing_species[@]}" | grep -q "^$species$"; then
+            missing_species+=("$species")
+        fi
+    done
+
+    # Get the maximum length of sequences in the orthogroup
+    max_length=0
+    current_length=0
+    while read -r line; do
+        if [[ "$line" == \>* ]]; then
+            if (( current_length > max_length )); then
+                max_length=$current_length
+            fi
+            current_length=0  # Reset for next sequence
+        else
+            current_length=$((current_length + ${#line}))
+        fi
+    done < "$orthogroup"
+
+    # Check the last sequence's length
+    if (( current_length > max_length )); then
+        max_length=$current_length
+    fi
+
+    # Create a new file path for the modified orthogroup
+    output_file="$output_dir/$(basename "$orthogroup")"
+
+    # Copy the original orthogroup content to the new file
+    cp "$orthogroup" "$output_file"
+
+    # Add missing species to the new orthogroup file
+    for species in "${missing_species[@]}"; do
+        echo "Adding missing species: $species"
+        # Add species header
+        echo ">${species}_00|" >> "$output_file"
+        
+        # Create the padded sequence with dashes
+        padding=$(printf '%*s' "$max_length" | tr ' ' '-')
+
+        # Split the padded sequence into lines of 60 characters
+        while [ -n "$padding" ]; do
+            echo "${padding:0:60}" >> "$output_file"
+            padding="${padding:60}"
+        done
+    done
+done
+```
+*DONE 15th September 2025*
+
+Now just testing a few to make sure everything looks good
+
+```{bash shows whether all the sequences are the same length for each orthogroup g90}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/align_comp_g90
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat62.txt.OrthoGroup344.fasta.out.trim
+## all the same
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat62.txt.OrthoGroup169.fasta.out.trim
+## all the same
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat62.txt.OrthoGroup700.fasta.out.trim
+## all the same
+```
+*DONE 28th March 2025*
+
+
+### A.7 - Concatenating the aligned files 
+
+So that does not give one sequence for each species, it keeps it split up. A modified script called `combine.pl` that i have made woop. 
+
+Concatenates, and also prints out the lengths to make sure everyting is good. 
+
+Species headers in orthogroups are >species_number|
+
+```{bash script for combining that i wrote so proud much wo}
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+# Check command-line arguments
+my ($expected_file, $output_file, @ortholog_files) = @ARGV;
+die("Usage: $0 <expected_file> <output_file> <ortholog_files...>\n") unless @ortholog_files;
+
+# Read expected species identifiers
+my %expected;
+open(my $efh, '<', $expected_file) or die "Could not open '$expected_file': $!";
+while (<$efh>) {
+    chomp;
+    s/^>//;  # Remove '>'
+    $expected{$_} = "";  # Initialize with empty string
+}
+close($efh);
+
+# Concatenate sequences for each species
+foreach my $ortholog_file (@ortholog_files) {
+    open(my $ofh, '<', $ortholog_file) or die "Could not open '$ortholog_file': $!";
+    my $current_species = '';
+    my $current_sequence = '';
+
+    while (<$ofh>) {
+        chomp;
+        if (/^>(\S+)_(\d+)\|/) {
+            # If we encounter a new header, save the current species sequence
+            if ($current_species && exists $expected{$current_species}) {
+                $expected{$current_species} .= $current_sequence;  # Append sequence
+            }
+
+            $current_species = $1;  # Get species name (spp)
+            $current_sequence = '';  # Reset for new species
+        } elsif ($current_species) {
+            $current_sequence .= $_;  # Build sequence
+        }
+    }
+
+    # Save the last species sequence
+    if ($current_species && exists $expected{$current_species}) {
+        $expected{$current_species} .= $current_sequence;
+    }
+
+    close($ofh);
+}
+
+# Write concatenated sequences and their lengths to output file
+open(my $outfh, '>', $output_file) or die "Could not open '$output_file': $!";
+foreach my $species (keys %expected) {
+    my $sequence = $expected{$species};
+    my $length = length($sequence);  # Get length of the concatenated sequence
+    print $outfh ">$species\n$sequence\n";  # Write species and its concatenated sequence
+    print "$species: $length bp\n";  # Print length to console
+}
+close($outfh);
+
+print "Concatenated FASTA file created: $output_file\n";
+```
+*DONE 28th March 2025*
+
+```{bash making bioperl environment}
+mamba create -n bioperl_env -c bioconda perl-bioperl
+```
+*DONE 28th March 2025*
+
+Command info
+
+```{bash SCO ag95}
+mamba activate bioperl_env
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree
+
+./combine.pl \
+expected.txt \
+concat_sco_65.fasta \
+align_comp_g95/SCOgreat65.txt.OrthoGroup*
+```
+*DONE 16th Septemebr 2025*
+Chagl: 219779 bp
+Labovulg5727a: 219779 bp
+Artol1: 219779 bp
+Spafl1: 219779 bp
+Hespharm5273b: 219779 bp
+Aurpu: 219779 bp
+Stigtria5733a: 219779 bp
+PhaPMI808: 219779 bp
+Pseudest1: 219779 bp
+Parchr1: 219779 bp
+Neucr2: 219779 bp
+Stano2: 219779 bp
+Verda1: 219779 bp
+Sclsan1: 219779 bp
+Subbsplen: 219779 bp
+HerpperiDH5868a: 219779 bp
+Diaam1: 219779 bp
+Aspfu: 219779 bp
+Triru1: 219779 bp
+Chahya: 219779 bp
+Pyxiarv: 219779 bp
+Bulin1: 219779 bp
+Umbpus1: 219779 bp
+DalEC12: 219779 bp
+Phapo1: 219779 bp
+Fusgr1: 219779 bp
+Clagr3: 219779 bp
+Hisca1: 219779 bp
+Tubme1: 219779 bp
+Botci1: 219779 bp
+Patat1: 219779 bp
+Geocook: 219779 bp
+Pyxisp141a: 219779 bp
+Plesi1: 219779 bp
+Pengri1: 219779 bp
+Exode1: 219779 bp
+Morsny1: 219779 bp
+Neoirr1: 219779 bp
+Pcit129764: 219779 bp
+Glost2: 219779 bp
+Perma1: 219779 bp
+Yarli1: 219779 bp
+Nyctstreb1699a: 219779 bp
+Ascim1: 219779 bp
+Metac1: 219779 bp
+Sacce1: 219779 bp
+Schpo1: 219779 bp
+PlePMI138: 219779 bp
+Parsp1: 219779 bp
+Paront1: 219779 bp
+TrireRUTC30: 219779 bp
+Venpi1: 219779 bp
+Monospp5611a: 219779 bp
+Mycgraminicolav2: 219779 bp
+Symko1: 219779 bp
+Dipse1: 219779 bp
+Xylhe1: 219779 bp
+Drest1: 219779 bp
+Aspnid1: 219779 bp
+HerpperiDH1187d: 219779 bp
+Ophnu1: 219779 bp
+Plesp1: 219779 bp
+Pleav1: 219779 bp
+Blugr1: 219779 bp
+Photr1: 219779 bp
+Pieho1: 219779 bp
+Trigu1: 219779 bp
+Cocca1: 219779 bp
+Colgr1: 219779 bp
+Concatenated FASTA file created: concat_sco_65.fasta
+
+```{bash SCO g90}
+mamba activate bioperl_env
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree
+
+./combine.pl \
+expected.txt \
+concat_sco_62.fasta \
+align_comp_g90/SCOgreat62.txt.OrthoGroup*
+```
+*DONE 28th March 2025*
+Trigu1: 483103 bp
+Plesp1: 483103 bp
+Pseudest1: 483103 bp
+Diaam1: 483103 bp
+Pengri1: 483103 bp
+Sclsan1: 483103 bp
+Parchr1: 483103 bp
+Botci1: 483103 bp
+Photr1: 483103 bp
+Ophnu1: 483103 bp
+DalEC12: 483103 bp
+Morsny1: 483103 bp
+Venpi1: 483103 bp
+Bulin1: 483103 bp
+Dipse1: 483103 bp
+Pyxisp141a: 483103 bp
+Aspfu: 483103 bp
+Chahya: 483103 bp
+Pleav1: 483103 bp
+PhaPMI808: 483103 bp
+Cocca1: 483103 bp
+Perma1: 483103 bp
+Symko1: 483103 bp
+Yarli1: 483103 bp
+Stigtria5733a: 483103 bp
+Sacce1: 483103 bp
+Tubme1: 483103 bp
+Labovulg5727a: 483103 bp
+Pcit129764: 483103 bp
+Metac1: 483103 bp
+HerpperiDH5868a: 483103 bp
+Drest1: 483103 bp
+Geocook: 483103 bp
+Chagl: 483103 bp
+Aspnid1: 483103 bp
+Artol1: 483103 bp
+Pyxiarv: 483103 bp
+Subbsplen: 483103 bp
+Triru1: 483103 bp
+Blugr1: 483103 bp
+PlePMI138: 483103 bp
+Phapo1: 483103 bp
+Parsp1: 483103 bp
+Xylhe1: 483103 bp
+Exode1: 483103 bp
+Aurpu: 483103 bp
+Stano2: 483103 bp
+Colgr1: 483103 bp
+TrireRUTC30: 483103 bp
+Umbpus1: 483103 bp
+Neucr2: 483103 bp
+Spafl1: 483103 bp
+Patat1: 483103 bp
+Glost2: 483103 bp
+Schpo1: 483103 bp
+HerpperiDH1187d: 483103 bp
+Plesi1: 483103 bp
+Verda1: 483103 bp
+Mycgraminicolav2: 483103 bp
+Neoirr1: 483103 bp
+Clagr3: 483103 bp
+Paront1: 483103 bp
+Pieho1: 483103 bp
+Hespharm5273b: 483103 bp
+Nyctstreb1699a: 483103 bp
+Hisca1: 483103 bp
+Monospp5611a: 483103 bp
+Ascim1: 483103 bp
+Fusgr1: 483103 bp
+Concatenated FASTA file created: concat_sco_62.fasta
+
+*NB* - Some trouble shooting that I leave here but fixed further up in the analysis. 
+Okay so two have weird lengths. 
+Pieho1: 9071 bp
+PlePMI138: 3583 bp
+
+This becuase the expected does not have the _1 (for Pieho1*_1*) and the same for PlePMI13*_1* in it.
+- Fixed these above in the pipeline so it is all good now. 
+
+```{bash awk one liner to print header and length of sequence}
+awk '/^>/{if (seq) print hdr, seq; hdr=$0; seq=""; next} {seq = seq $0} END{print hdr, seq}' input.fasta | awk '{print $1, length($2)}'
+```
+
+
+
+### A.8 - RAXML Tree
+
+```{bash running the g95 sco for the multiclass with root}
+#!/bin/bash
+#SBATCH --time=168:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=60G
+#SBATCH --job-name=raxml_g95
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/raxml_root_g95/raxml.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/raxml_root_g95/raxml.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=30
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate raxml_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/raxml_root_g95
+
+raxmlHPC-PTHREADS-AVX2 \
+-f a \
+-s ../concat_sco_65.fasta \
+-n laboul_class_SCOgreat95_100bs_root \
+-m PROTGAMMAAUTO \
+-x 8212 \
+-N 100 \
+-p 1176 \
+-T 60 \
+-o Schpo1,Neoirr1
+```
+
+```{bash running the g90 sco for the multiclass with root}
+#!/bin/bash
+#SBATCH --time=168:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=60G
+#SBATCH --job-name=raxml_g90
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/raxml_root_g90/raxml.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/raxml_root_g90/raxml.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=30
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate raxml_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/raxml_root_g90
+
+raxmlHPC-PTHREADS-AVX2 \
+-f a \
+-s ../concat_sco_62.fasta \
+-n laboul_class_SCOgreat90_100bs_root \
+-m PROTGAMMAAUTO \
+-x 8212 \
+-N 100 \
+-p 1176 \
+-T 60 \
+-o Schpo1,Neoirr1
+```
+*DONE 16th September 2025*
+
+Have a look at different models in a model test
+-q flag 
+
+Lazlo comment: partitioning can improve the most. 
+Define different partitions with same model, raxml still estimates different parameters.
+
+Program execution info written to /rc_scratch/beyo2625/raxml_res/RAxML_info.laboul_multiclass_100bp
+All 100 bootstrapped trees written to: /rc_scratch/beyo2625/raxml_res/RAxML_bootstrap.laboul_multiclass_100bp
+
+Best-scoring ML tree written to: /rc_scratch/beyo2625/raxml_res/RAxML_bestTree.laboul_multiclass_100bp
+
+Best-scoring ML tree with support values written to: /rc_scratch/beyo2625/raxml_res/RAxML_bipartitions.laboul_multiclass_100bp
+
+Best-scoring ML tree with support values as branch labels written to: /rc_scratch/beyo2625/raxml_res/RAxML_bipartitionsBranchLabels.laboul_multiclass_100bp
+
+Overall execution time for full ML analysis: 136593.836935 secs or 37.942732 hours or 1.580947 days
+
+
+### A.9 - Topology Testing
+
+Getting the tree without the tree labels and things
+
+```{bash making newick with no branch lengths for topology testing}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/raxml_root_g90
+sed 's/:[0-9.eE+-]\+//g' RAxML_bestTree.laboul_class_SCOgreat90_100bs_root > class_SCOgreat90_nolength
+```
+
+And then Alisha made trees with the altered topologies, and they need to be in one file. Also have the best tree as the first one as reference. 
+
+```{bash running topology testing}
+#!/bin/bash
+#SBATCH --time=100:00:00
+#SBATCH --qos=blanca-qsmicrobes
+#SBATCH --partition=blanca-qsmicrobes
+#SBATCH --account=blanca-qsmicrobes
+#SBATCH --nodes=1
+#SBATCH --mem=150G
+#SBATCH --job-name=iqtree
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/topo/iqtree.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/topo/iqtree.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=30
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate iqtree_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/class_tree/topo
+
+iqtree2 -s concat_sco_62.fasta \
+        -z all_tree \
+        --seqtype AA \
+        -te RAxML_bipartitions.laboul_class_SCOgreat90_100bs_root \
+        -n 0 \
+        -m LG+G+F \
+        -zb 10000 \
+        -zw \
+        -au \
+        --threads-max 60
+```
+
+
+## B) Labouls with just Dothidomycetes. 
+### B.1 - Downloading all proteomes
+
+We have the Laboul genomes used in the other tree as well. 
+We also have all the Dothidiomycetes donwloaded from JGI. We will be renaming this so that they are all common and useful. 
+
+### B.2 - Renaming Files 
+
+First gunzipping everything 
+
+```{bash gunzipping}
+cd 
+gunzip *.gz
+```
+*DONE 15th September 2025*
+
+```{bash main renaming}
+for file in *.fa*; do
+    # Step 1: Remove 'GeneCatalog_proteins_xxxxxx'
+    new_name=$(echo "$file" | sed 's/GeneCatalog_proteins_[0-9]\{6,8\}//')
+    
+    # Step 2: Remove 'prot' and 'proteins'
+    new_name=$(echo "$new_name" | sed 's/_prot//g; s/_proteins//g')
+    
+    # Step 3: Ensure filenames end with '.aa.fasta'
+    new_name=$(echo "$new_name" | sed 's/.fasta$//; s/.fa$//')
+    new_name="${new_name}.aa.fasta"
+    
+    # Rename the file
+    mv "$file" "$new_name"
+done
+```
+*DONE 15th September 2025*
+
+So some underscores left and also some .aa.aa, quick script to fix those
+
+```{bash secondry fix}
+for file in *.fa*; do
+    # Step 1: Remove '_' only if followed by '.aa'
+    new_name=$(echo "$file" | sed 's/_\.aa/.aa/g')
+    
+    # Step 2: Replace '.aa.aa' with '.aa'
+    new_name=$(echo "$new_name" | sed 's/\.aa\.aa/\.aa/g')
+    
+    # Rename the file
+    mv "$file" "$new_name"
+done
+```
+*DONE 15th September 2025*
+
+A few files to rename manually 
+
+```{bash mv rename select files}
+mv Aciri1_iso.aa.fasta Aciri1.aa.fasta
+mv Botdo1_1.aa.fasta Botdo11.aa.fasta
+mv Chalara_hyalina.aa.fasta Chalhyal.aa.fasta
+mv Herpomyces_periplanetae_DH5868a.proteins.aa.fasta Herpperi5868a.aa.fasta
+mv Hesperomyces_harmoniae_DH5273b.proteins.aa.fasta Hespharm5273b.aa.fasta
+mv Laboulbenia_vulgaris_DH5727a.proteins.aa.fasta Labovulg5757.aa.fasta
+mv Monoicomyces_spp_DH5611a.proteins.aa.fasta Monospp5611a.aa.fasta
+mv Mytre1_alleins_20150115.aa.fasta Mytre1.aa.fasta
+mv Nycteromyces_streblidinus_DH1699a.proteins.aa.fasta Nyctstrebl1699a.aa.fasta
+mv Pieho1_1.aa.fasta Pieho1.aa.fasta
+mv Pyxidiophora_arvernensis.proteins.aa.fasta Pyxiarver.aa.fasta
+mv Pyxidiophora_sp141.proteins.aa.fasta Pyxisp141A.aa.fasta
+mv Rhyru1_1.aa.fasta Rhyru1.aa.fasta
+mv Rickia_wasmannii_DH5870a.proteins.aa.fasta Rickwasm5870a.aa.fasta
+mv Stigmatomyces_trianguliapicalis_DH5733a.proteins.aa.fasta Stigtria5733a.aa.fasta
+mv Subbaromyces_splendens_pure_culture.proteins.aa.fasta Subbsple.aa.fasta
+mv Zymtr1_AllModelseins_20230422.aa.fasta Zymtr1.aa.fasta
+mv Hyspu1_1.aa.fasta Hyspu1.aa.fasta
+mv Chahya1_GeneCatalog_proteins_20220505.aa.fasta Chahya1.aa.fasta
+```
+*DONE 15th September 2025*
+
+Wunderbar, so all proteomes are from JGI OR generated through funannotate, so need to rename things accordingly. 
+
+For JGI -> jgi|Verda1|5|VDAG_00005T0
+For funannotate -> >SABSPL_000002-T1 SABSPL_000002
+
+Sop for protein renaming I am just using the first part of the proein fasta name and then doing the sequential numbering. 
+
+```{bash renaming all the proteins}
+for file in *.fasta; do
+    base=$(basename "$file" | cut -d. -f1) # Get the base name without extension
+    awk -v prefix="${base}_" '{
+        if (substr($0, 1, 1) == ">") {
+            count++
+            # Create the new header format with sequential numbering
+            printf(">%s%d|\n", prefix, count)
+        } else {
+            print $0
+        }
+    }' "$file" > ../modified_prot_fastas/"${file}.modified" # Output to a new file with .modified suffix
+done
+```
+*DONE 15th September 2025*
+
+Woooo all done and looks good. 
+Need to remove all * from the amino acid sequences
+
+```{bash getting rid of any stars in the protein sequences}
+for file in *.modified; do
+    # Use sed to remove '*' at the end of sequences (non-header lines)
+    sed -i 's/\([A-Z]*\)\*/\1/g' "$file"
+done
+```
+*DONE 15th September 2025*
+
+MAKE SURE TO ADD IN THE OUTGROUPS !!!!!!!!!!!!!
+^^ Shit, these are in the class tree and have copied over
+
+```{bash copying the outgroups for dothido tree}
+cp class_tree/modified_prot_fastas/Umbpus1.aa.fasta.modified* dothido_tree/modified_prot_fastas/
+cp class_tree/modified_prot_fastas/Clagr3.aa.fasta.modified* dothido_tree/modified_prot_fastas/
+cp class_tree/modified_prot_fastas/Hisca1.aa.fasta.modified* dothido_tree/modified_prot_fastas/
+cp class_tree/modified_prot_fastas/Pengri1.aa.fasta.modified* dothido_tree/modified_prot_fastas/
+cp class_tree/modified_prot_fastas/Aspnid1.aa.fasta.modified* dothido_tree/modified_prot_fastas/
+```
+
+
+### B.3 - Identyfying orthologus gene clusters 
+
+https://gitlab.com/paulklemm_PHD/proteinortho 
+
+```{bash installing proteinortho6}
+mamba create -n proteinortho6_env -c bioconda proteinortho
+```
+*DONE 15th September 2025*
+
+```{bash running proteinortho}
+#!/bin/bash
+#SBATCH --time=16:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=50G
+#SBATCH --job-name=protortho_noacastr
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/prot_ortho/protortho_dothido.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/prot_ortho/protortho_dothido.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=10
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate proteinorthoold_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/prot_ortho
+
+proteinortho6.pl \
+-project=labouls_dothido \
+-cpus=20 \
+--temp=/scratch/alpine/beyo2625/temp_space \
+../modified_prot_fastas/*.modified
+```
+*DONE 15th September 2025*
+
+Had to downgrade `diamond` to 2.1.10 for some reason. Doing that it worked well. 
+https://github.com/bbuchfink/diamond/issues/855
+
+Notes, from looking at orignal results I had to remove the following as they caused no single copy orthologs at all. Re-ran after removing those. 
+- Mytre1.aa.fasta.modified
+- Zymtr1.aa.fasta.modified
+- Racan1.aa.fasta.modified
+
+
+### B.4 - Extracting Single Copies
+
+How many proteomes do we have total. 
+
+```{bash}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/modified_prot_fastas
+ls *.modified | wc -l
+```
+*DONE 15th September 2025*
+
+So we have *113*, we need to then extract the 113/t113 rows for single copy orthologs from the proteinortho results. 
+
+Also downloading to make sure nothing is crazy weird. 
+
+```{bash downloading the protein ortho results}
+scp beyo2625@login.rc.colorado.edu:/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/prot_ortho/labouls_dothido.proteinortho.tsv \
+/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/raxml_trees/dothido_tree
+```
+
+Okikoke, loooks like we get some decent stuff after fixing the proteomes. 
+
+```{bash extracting pure scos}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/prot_ortho
+grep $'^113\t113' labouls_dothido.proteinortho.tsv > SCO_all.tsv
+wc -l SCO*
+```
+*DONE 15th September 2025*
+
+This gives 0 SCO between all species. Lol. 
+
+Now splitting up by percentages, lets do 90% and 85%
+
+```{r working out the percentages}
+(113/100)*95
+(113/100)*90
+(113/100)*85
+(113/100)*80
+(113/100)*70
+```
+*DONE 15th September 2025*
+
+```{bash extracting different percentages}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/prot_ortho
+awk '$1 == $2 && $1 > 107' labouls_dothido.proteinortho.tsv > SCO_great107.txt
+awk '$1 == $2 && $1 > 101' labouls_dothido.proteinortho.tsv > SCO_great101.txt
+awk '$1 == $2 && $1 > 96' labouls_dothido.proteinortho.tsv > SCO_great96.txt
+awk '$1 == $2 && $1 > 90' labouls_dothido.proteinortho.tsv > SCO_great90.txt
+awk '$1 == $2 && $1 > 79' labouls_dothido.proteinortho.tsv > SCO_great79.txt
+wc -l SCO*
+```
+*DONE 15th September 2025*
+```
+526 SCO_great79.txt
+395 SCO_great90.txt
+310 SCO_great96.txt
+199 SCO_great101.txt
+90 SCO_great107.txt
+1430 total
+```
+
+Going to use in >85% species and >90% species
+
+```{bash greater 90 percent SCOs}
+#!/bin/bash
+#SBATCH --time=12:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=20G
+#SBATCH --job-name=grabprots_90perc
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g90/grabprots_90perc.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g90/grabprots_90perc.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=10
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate proteinortho_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree
+proteinortho_grab_proteins.pl \
+-exact \
+-cpus=20 \
+-tofiles=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g90 \
+prot_ortho/SCO_great101.txt \
+modified_prot_fastas/*.aa.fasta.modified
+```
+*DONE 15th September 2025*
+
+```{bash greater 85 percent SCOs}
+#!/bin/bash
+#SBATCH --time=12:00:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=20G
+#SBATCH --job-name=grabprots_85perc
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g85/grabprots_85perc.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g85/grabprots_85perc.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=10
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate proteinortho_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree
+proteinortho_grab_proteins.pl \
+-exact \
+-cpus=20 \
+-tofiles=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g85 \
+prot_ortho/SCO_great96.txt \
+modified_prot_fastas/*.aa.fasta.modified
+```
+*DONE 15th September 2025*
+
+```{bash checking the lengths}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g90
+ls * | wc -l ## should be 199, , is when you minus 3 (the job files)
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g85
+ls * | wc -l ## should be 310, is when you minus 3 (the job files)
+```
+*DONE 15th September 2025*
+
+### B.5 - Alignment
+
+Now aligning all the orthogroups with `muscle5`. 
+
+```{bash alining only SCOs in 90 percent or greater}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --job-name=muscle_g90_loop
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/muscle.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/muscle.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g90
+PALMATA=$(ls *.fasta)
+
+echo "files going through mucle5 alignment for dothido >90%"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --partition=amilan' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --qos=normal' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --time=02:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mem=50G' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --job-name='"$PALPAL"'_muscle_g90' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/'"$PALPAL"'_muscle.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/'"$PALPAL"'_muscle.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+echo 'conda activate muscle_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'muscle \
+-super5 sco_ortho_g90/'"${PALPAL}"' \
+-output sco_align_g90/'"${PALPAL}"'.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90/loop_err_out/"$PALPAL"_muscle.sh
+done
+```
+*DONE 15th September 2025*
+
+```{bash alining only SCOs in 85 percent or greater}
+#!/bin/bash
+#SBATCH --time=00:10:00
+#SBATCH --qos=normal
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=2G
+#SBATCH --job-name=muscle_g85_loop
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/muscle.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/muscle.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_ortho_g85
+PALMATA=$(ls *.fasta)
+
+echo "files going through mucle5 alignment for dothido >90%"
+echo $PALMATA
+
+for PALPAL in $PALMATA
+do
+echo "$PALPAL"
+echo '#!/bin/bash' > /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --account=ucb423_asc2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --partition=amilan' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --qos=normal' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --time=02:00:00' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --nodes=1' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mem=50G' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --ntasks=5' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --cpus-per-task=2' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --job-name='"$PALPAL"'_muscle_g85' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/'"$PALPAL"'_muscle.err' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/'"$PALPAL"'_muscle.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-type=ALL' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo '#SBATCH --mail-user=beyo2625@colorado.edu' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'module purge' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo 'eval "$(conda shell.bash hook)"' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+echo 'conda activate muscle_env' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+
+echo 'muscle \
+-super5 sco_ortho_g85/'"${PALPAL}"' \
+-output sco_align_g85/'"${PALPAL}"'.out' >> /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+sbatch /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85/loop_err_out/"$PALPAL"_muscle.sh
+done
+```
+*DONE 15th September 2025*
+
+Also checking to make sure all ogs were processed (1486 SCOs)
+
+```{bash}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90
+ls *.out | wc -l ## is 199 yay
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85
+ls *.out | wc -l ## is 310 yay
+```
+
+
+### B.6 - Cleaning alignments
+
+```{bash only SCO trimal for aligned g90}
+mamba activate trimal_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g90
+PALMATA=$(ls *.out)
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree
+
+for PALPAL in $PALMATA
+do
+trimal \
+-in sco_align_g90/"$PALPAL" \
+-out sco_clean_g90/"$PALPAL".trim \
+-gappyout
+done
+```
+*DONE 16th September 2025*
+
+```{bash only SCO trimal for aligned g85}
+mamba activate trimal_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_align_g85
+PALMATA=$(ls *.out)
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree
+
+for PALPAL in $PALMATA
+do
+trimal \
+-in sco_align_g85/"$PALPAL" \
+-out sco_clean_g85/"$PALPAL".trim \
+-gappyout
+done
+```
+*DONE 16th September 2025*
+
+```{bash checking all processed}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_clean_g90
+ls *.trim | wc -l ## 199 yay
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_clean_g85
+ls *.trim | wc -l ## 310 yay
+```
+*DONE 16th September 2025*
+
+
+### B.7 - Creating the expected file or something 
+
+This is the species names, so we sould have **113**. This can be used for g85 and g90. 
+
+```{bash}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_clean_g90
+cat *.fasta.out.trim | grep "^>" | tr "_" "\t" | cut -f 1 | sort | uniq > ../expected.txt
+wc -l ../expected.txt
+```
+*DONE 16th September 2025*
+
+Gives 113 lines which is what we want woop yay. 
+
+*NB:* Make sure to check that the _1 file is not in there. - fixed earlier so all good. 
+
+And now doing the >90% SCOs
+
+Before concatenating we need to complete the entries which did not have any genes. The `species_list.txt` can be used for g85 and g90 again. 
+
+```{bash making the 108 species list}
+# Create a list of all species
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree
+ls modified_prot_fastas/*.aa.fasta.modified | sed 's|modified_prot_fastas/||; s|\.aa\.fasta\.modified||' > species_list.txt
+wc -l species_list.txt ##gives 113 wooooo.
+```
+*DONE 1st April 2025*
+
+*NB* Check the _1 is removed. If not do manually. - did earlier yay. 
+
+```{bash completing the orthogroups so all species present with padding sequences for g90}
+# Path to required things
+species_file="/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/species_list.txt"
+orthogroup_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_clean_g90"
+output_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_comp_g90"
+line_length=60
+
+for orthogroup in "$orthogroup_dir"/*.out.trim; do
+    echo "Processing $orthogroup"
+    
+    # Extract existing species from the orthogroup file
+    existing_species=$(grep ">" "$orthogroup" | sed 's/>//; s/_.*//')
+
+    # Read species into an array
+    readarray -t all_species < "$species_file"
+
+    # Create an array to hold missing species
+    missing_species=()
+
+    # Identify missing species
+    for species in "${all_species[@]}"; do
+        if ! printf '%s\n' "${existing_species[@]}" | grep -q "^$species$"; then
+            missing_species+=("$species")
+        fi
+    done
+
+    # Get the maximum length of sequences in the orthogroup
+    max_length=0
+    current_length=0
+    while read -r line; do
+        if [[ "$line" == \>* ]]; then
+            if (( current_length > max_length )); then
+                max_length=$current_length
+            fi
+            current_length=0  # Reset for next sequence
+        else
+            current_length=$((current_length + ${#line}))
+        fi
+    done < "$orthogroup"
+
+    # Check the last sequence's length
+    if (( current_length > max_length )); then
+        max_length=$current_length
+    fi
+
+    # Create a new file path for the modified orthogroup
+    output_file="$output_dir/$(basename "$orthogroup")"
+
+    # Copy the original orthogroup content to the new file
+    cp "$orthogroup" "$output_file"
+
+    # Add missing species to the new orthogroup file
+    for species in "${missing_species[@]}"; do
+        echo "Adding missing species: $species"
+        # Add species header
+        echo ">${species}_00|" >> "$output_file"
+        
+        # Create the padded sequence with dashes
+        padding=$(printf '%*s' "$max_length" | tr ' ' '-')
+
+        # Split the padded sequence into lines of 60 characters
+        while [ -n "$padding" ]; do
+            echo "${padding:0:60}" >> "$output_file"
+            padding="${padding:60}"
+        done
+    done
+done
+```
+*DONE 16th September 2025*
+
+```{bash shows whether all the sequences are the same length for each orthogroup g90}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_comp_g90
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat101.txt.OrthoGroup94.fasta.out.trim
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat101.txt.OrthoGroup147.fasta.out.trim
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat101.txt.OrthoGroup12.fasta.out.trim
+```
+*DONE 16th September 2025*
+
+So this makes all the files and they look good for g90, yay. 
+
+```{bash completing the orthogroups so all species present with padding sequences for g85}
+# Path to required things
+species_file="/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/species_list.txt"
+orthogroup_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_clean_g85"
+output_dir="/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_comp_g85"
+line_length=60
+
+for orthogroup in "$orthogroup_dir"/*.out.trim; do
+    echo "Processing $orthogroup"
+    
+    # Extract existing species from the orthogroup file
+    existing_species=$(grep ">" "$orthogroup" | sed 's/>//; s/_.*//')
+
+    # Read species into an array
+    readarray -t all_species < "$species_file"
+
+    # Create an array to hold missing species
+    missing_species=()
+
+    # Identify missing species
+    for species in "${all_species[@]}"; do
+        if ! printf '%s\n' "${existing_species[@]}" | grep -q "^$species$"; then
+            missing_species+=("$species")
+        fi
+    done
+
+    # Get the maximum length of sequences in the orthogroup
+    max_length=0
+    current_length=0
+    while read -r line; do
+        if [[ "$line" == \>* ]]; then
+            if (( current_length > max_length )); then
+                max_length=$current_length
+            fi
+            current_length=0  # Reset for next sequence
+        else
+            current_length=$((current_length + ${#line}))
+        fi
+    done < "$orthogroup"
+
+    # Check the last sequence's length
+    if (( current_length > max_length )); then
+        max_length=$current_length
+    fi
+
+    # Create a new file path for the modified orthogroup
+    output_file="$output_dir/$(basename "$orthogroup")"
+
+    # Copy the original orthogroup content to the new file
+    cp "$orthogroup" "$output_file"
+
+    # Add missing species to the new orthogroup file
+    for species in "${missing_species[@]}"; do
+        echo "Adding missing species: $species"
+        # Add species header
+        echo ">${species}_00|" >> "$output_file"
+        
+        # Create the padded sequence with dashes
+        padding=$(printf '%*s' "$max_length" | tr ' ' '-')
+
+        # Split the padded sequence into lines of 60 characters
+        while [ -n "$padding" ]; do
+            echo "${padding:0:60}" >> "$output_file"
+            padding="${padding:60}"
+        done
+    done
+done
+```
+*DONE 16th September 2025*
+
+```{bash shows whether all the sequences are the same length for each orthogroup g85}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/sco_comp_g85
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat96.txt.OrthoGroup43.fasta.out.trim
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat96.txt.OrthoGroup111.fasta.out.trim
+
+awk '/^>/ { if (seqlen > 0) print header, seqlen; header=$0; seqlen=0; next } { seqlen += length($0) } END { if (seqlen > 0) print header, seqlen }' SCOgreat96.txt.OrthoGroup250.fasta.out.trim
+```
+*DONE 16th September 2025*
+
+So this makes all the files and they look good for g85 yay.
+
+
+### B.8 - Concatenating the aligned files 
+
+A modified script called `combine.pl` that i have made woop. 
+
+Concatenates, and also prints out the lengths to make sure everything is good. 
+
+Species headers in orthogroups are >species_number|
+
+```{bash script for combining that i wrote so proud much wo}
+#!/usr/bin/perl
+use strict;
+use warnings;
+
+# Check command-line arguments
+my ($expected_file, $output_file, @ortholog_files) = @ARGV;
+die("Usage: $0 <expected_file> <output_file> <ortholog_files...>\n") unless @ortholog_files;
+
+# Read expected species identifiers
+my %expected;
+open(my $efh, '<', $expected_file) or die "Could not open '$expected_file': $!";
+while (<$efh>) {
+    chomp;
+    s/^>//;  # Remove '>'
+    $expected{$_} = "";  # Initialize with empty string
+}
+close($efh);
+
+# Concatenate sequences for each species
+foreach my $ortholog_file (@ortholog_files) {
+    open(my $ofh, '<', $ortholog_file) or die "Could not open '$ortholog_file': $!";
+    my $current_species = '';
+    my $current_sequence = '';
+
+    while (<$ofh>) {
+        chomp;
+        if (/^>(\S+)_(\d+)\|/) {
+            # If we encounter a new header, save the current species sequence
+            if ($current_species && exists $expected{$current_species}) {
+                $expected{$current_species} .= $current_sequence;  # Append sequence
+            }
+
+            $current_species = $1;  # Get species name (spp)
+            $current_sequence = '';  # Reset for new species
+        } elsif ($current_species) {
+            $current_sequence .= $_;  # Build sequence
+        }
+    }
+
+    # Save the last species sequence
+    if ($current_species && exists $expected{$current_species}) {
+        $expected{$current_species} .= $current_sequence;
+    }
+
+    close($ofh);
+}
+
+# Write concatenated sequences and their lengths to output file
+open(my $outfh, '>', $output_file) or die "Could not open '$output_file': $!";
+foreach my $species (keys %expected) {
+    my $sequence = $expected{$species};
+    my $length = length($sequence);  # Get length of the concatenated sequence
+    print $outfh ">$species\n$sequence\n";  # Write species and its concatenated sequence
+    print "$species: $length bp\n";  # Print length to console
+}
+close($outfh);
+
+print "Concatenated FASTA file created: $output_file\n";
+```
+*DONE 1st April 2025*
+
+Command info
+
+```{bash SCO for g90}
+mamba activate bioperl_env
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree
+./combine.pl \
+expected.txt \
+concat_sco_101.fasta \
+sco_comp_g90/SCOgreat101.txt.OrthoGroup*
+```
+*DONE 1st April 2025*
+
+So this gives all the entries as 124,269 bp for >90% SCO in species yay. Onto raxml
+
+```{bash SCO for g85}
+mamba activate bioperl_env
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree
+./combine.pl \
+expected.txt \
+concat_sco_96.fasta \
+sco_comp_g85/SCOgreat96.txt.OrthoGroup*
+```
+*Redone on*
+
+So this gives all the entries as 191,425 bp for >85% SCO in species yay. Onto raxml
+
+
+### B.9 - RAXML Tree
+
+```{bash running the g90 sco for the multiclass and rooting it}
+#!/bin/bash
+#SBATCH --time=168:00:00
+#SBATCH --qos=long
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=100G
+#SBATCH --job-name=raxml
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g90/raxml_root.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g90/raxml_root.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=25
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate raxml_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g90
+
+raxmlHPC-PTHREADS-AVX2 \
+-f a \
+-s ../concat_sco_101.fasta \
+-n dothido_SCO_g90_ROOTED \
+-m PROTGAMMAAUTO \
+-x 8212 \
+-N 100 \
+-p 1176 \
+-T 50 \
+-o Umbpus1,Clagr3,Hisca1,Pengri1,Aspnid1
+```
+*DONE 16th September 2025*
+
+```{bash running the g85 sco for the multiclass and rooting it}
+#!/bin/bash
+#SBATCH --time=168:00:00
+#SBATCH --qos=long
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=100G
+#SBATCH --job-name=raxml
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g85/raxml_root.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g85/raxml_root.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=25
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate raxml_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g85
+
+raxmlHPC-PTHREADS-AVX2 \
+-f a \
+-s ../concat_sco_96.fasta \
+-n dothido_SCO_g85_ROOTED \
+-m PROTGAMMAAUTO \
+-x 8212 \
+-N 100 \
+-p 1176 \
+-T 50 \
+-o Umbpus1,Clagr3,Hisca1,Pengri1,Aspnid1
+```
+*DONE 16th September 2025*
+
+```{bash trying raxmlng for the g85}
+#!/bin/bash
+#SBATCH --time=168:00:00
+#SBATCH --qos=long
+#SBATCH --partition=amilan
+#SBATCH --account=ucb423_asc2
+#SBATCH --nodes=1
+#SBATCH --mem=100G
+#SBATCH --job-name=raxmlng85
+#SBATCH --error=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g85/raxmlng_root.err
+#SBATCH --output=/scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g85/raxmlng_root.out
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=beyo2625@colorado.edu
+#SBATCH --ntasks=25
+#SBATCH --cpus-per-task=2
+
+module purge 
+eval "$(conda shell.bash hook)"
+conda activate raxmlng_env
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g85
+
+raxml-ng --msa ../concat_sco_96.fasta \
+         --prefix dothido_SCO_g85_ROOTED_raxmlng \
+         --model TEST \
+         --threads 2 \
+         --seed 1176 \
+         --bs-trees 100 \
+         --tree pars{10} \
+         --bs-metric fbp,tbe \
+         --outgroup Umbpus1,Clagr3,Hisca1,Pengri1,Aspnid1
+```
+
+
+### B.10 - Topology Testing
+
+Getting the tree without the tree labels and things
+
+```{bash making newick with no branch lengths for topology testing}
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g90
+sed 's/:[0-9.eE+-]\+//g' RAxML_bestTree.dothido_SCO_g90_ROOTED > dothido_SCOgreat90_nolength
+
+cd /scratch/alpine/beyo2625/laboul_all/laboul_trees/dothido_tree/raxml_sco_g85
+sed 's/:[0-9.eE+-]\+//g' RAxML_bestTree.dothido_SCO_g85_ROOTED > dothido_SCOgreat85_nolength
+```
+
+
+
+## C) -  Archive
+### Sumitting more than a thousand jobs
+
+Okay so I cannot submit more than 1000 jobs at a time on the amilan. BUT as we have the .sh and the ones that ran .err and .out, we can run a loop to identify the files which have the .err and .out (and ran), skip them, and only submit the ones which have a .sh and no corresponding .err and .out !
+
+```{bash submitting jobs that have not run yet}
+for job_script in *.sh; do
+    # Check if the corresponding .out and .err files exist
+    base_name="${job_script%.sh}"  # Remove the .sh extension
+    out_file="${base_name}.out"
+    err_file="${base_name}.err"
+
+    # If either the .out or .err file is missing, submit the job
+    if [[ ! -f "$out_file" || ! -f "$err_file" ]]; then
+        echo "Submitting job: $job_script"
+        sbatch "$job_script"
+    else
+        echo "Skipping $job_script (already has .out and .err files)"
+    fi
+done
+```
+*NA*
+
+and a for loop to see how many species are in each file if you are interested
+
+```{bash for loop to see species in each orthogroup}
+for file in *.out
+do
+echo "$file"
+grep ">" "$file" | wc -l 
+done
+```
+*NA*
