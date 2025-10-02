@@ -1,0 +1,107 @@
+---
+title: "laboul_genome_stats_plotting"
+output: html_document
+date: "2025-04-21"
+---
+
+```{r loading libraries, include = F}
+library(tidyverse)
+```
+
+```{r reasding in data and organising the measure order}
+read.csv(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/laboul_genomes/spreadsheets_ppt/busco_res.csv") %>% 
+  mutate(Measure = factor(Measure, c("Complete and Single Copy",
+        "Complete and Duplicated",
+        "Fragmented",
+        "Missing"))) %>% 
+  mutate(percentage = as.numeric(Percentage)) -> busco_res
+View(busco_res)
+```
+
+```{r splitting into different busco measures}
+busco_res %>% 
+  dplyr::filter(Database %in% "ascomycota_odb10", 
+                Molecule %in% "DNA") -> asco_dna
+busco_res %>% 
+  dplyr::filter(Database %in% "dothideomycetes_odb10", 
+                Molecule %in% "DNA") -> doth_dna
+busco_res %>% 
+  dplyr::filter(Database %in% "ascomycota_odb10", 
+                !Molecule %in% "DNA") -> asco_prot
+busco_res %>% 
+  dplyr::filter(Database %in% "dothideomycetes_odb10", 
+                !Molecule %in% "DNA") -> doth_prot
+```
+
+```{r plotting asco DNA and protein, fig.width=17, fig.height=5}
+ggplot(data = asco_dna, 
+       aes(y = percentage, 
+           x = Species, 
+           fill = Measure, 
+           label = percentage)) +
+  geom_bar(stat = "identity", 
+           position = position_stack(reverse = T)) +
+  theme_bw() + 
+  coord_flip() +
+  scale_x_discrete(expand = c(0,0)) + 
+  scale_y_continuous(labels = c("0%", "20%", "40%", "60%", "80%", "100%"), 
+                     breaks = c(0, 20, 40, 60, 80, 100), 
+                     expand = c(0,0)) +
+  scale_fill_manual(name = "busco_measure", 
+                    values = c("steelblue1", "steelblue4", "yellow3", "red3")) + 
+  theme(text = element_text(size=15, family = "Arial"))
+
+ggplot(data = asco_prot, 
+       aes(y = percentage, 
+           x = Species, 
+           fill = Measure, 
+           label = percentage)) +
+  geom_bar(stat = "identity", 
+           position = position_stack(reverse = T)) +
+  theme_bw() + 
+  coord_flip() +
+  scale_x_discrete(expand = c(0,0)) + 
+  scale_y_continuous(labels = c("0%", "20%", "40%", "60%", "80%", "100%"), 
+                     breaks = c(0, 20, 40, 60, 80, 100), 
+                     expand = c(0,0)) +
+  scale_fill_manual(name = "busco_measure", 
+                    values = c("steelblue1", "steelblue4", "yellow3", "red3")) + 
+  theme(text = element_text(size=15, family = "Arial"))
+```
+
+
+```{r plotting dothido DNA and protein, fig.width=17, fig.height=5}
+ggplot(data = doth_dna, 
+       aes(y = percentage, 
+           x = Species, 
+           fill = Measure, 
+           label = percentage)) +
+  geom_bar(stat = "identity", 
+           position = position_stack(reverse = T)) +
+  theme_bw() + 
+  coord_flip() +
+  scale_x_discrete(expand = c(0,0)) + 
+  scale_y_continuous(labels = c("0%", "20%", "40%", "60%", "80%", "100%"), 
+                     breaks = c(0, 20, 40, 60, 80, 100), 
+                     expand = c(0,0)) +
+  scale_fill_manual(name = "busco_measure", 
+                    values = c("steelblue1", "steelblue4", "yellow3", "red3")) + 
+  theme(text = element_text(size=15, family = "Arial"))
+
+ggplot(data = doth_prot, 
+       aes(y = percentage, 
+           x = Species, 
+           fill = Measure, 
+           label = percentage)) +
+  geom_bar(stat = "identity", 
+           position = position_stack(reverse = T)) +
+  theme_bw() + 
+  coord_flip() +
+  scale_x_discrete(expand = c(0,0)) + 
+  scale_y_continuous(labels = c("0%", "20%", "40%", "60%", "80%", "100%"), 
+                     breaks = c(0, 20, 40, 60, 80, 100), 
+                     expand = c(0,0)) +
+  scale_fill_manual(name = "busco_measure", 
+                    values = c("steelblue1", "steelblue4", "yellow3", "red3")) + 
+  theme(text = element_text(size=15, family = "Arial"))
+```
