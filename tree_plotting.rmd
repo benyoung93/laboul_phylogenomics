@@ -1,0 +1,1976 @@
+---
+title: "laboul_tree"
+output: html_document
+date: "2024-07-16"
+---
+
+So we have the `class` and `dothido` tree to plot and visualise. Yay. 
+
+```{r library loading, include = F}
+library(tidyverse)
+library(ggtree)
+library(treeio)
+library(tidytree)
+sessionInfo()
+```
+
+To get the `ggtree::collapse` to work you need to load these things. 
+https://github.com/YuLab-SMU/enrichplot/issues/249
+
+```{r}
+nodeid.tbl_tree <- utils::getFromNamespace("nodeid.tbl_tree", "tidytree")
+rootnode.tbl_tree <- utils::getFromNamespace("rootnode.tbl_tree", "tidytree")
+offspring.tbl_tree <- utils::getFromNamespace("offspring.tbl_tree", "tidytree")
+offspring.tbl_tree_item <- utils::getFromNamespace(".offspring.tbl_tree_item", "tidytree")
+child.tbl_tree <- utils::getFromNamespace("child.tbl_tree", "tidytree")
+parent.tbl_tree <- utils::getFromNamespace("parent.tbl_tree", "tidytree")
+```
+
+
+## 1. Class Tree
+
+```{r}
+read.newick(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/raxml_trees/class_tree/raxml_root_g90/RAxML_bipartitions.laboul_class_SCOgreat90_100bs_root") -> class_data
+read.csv(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/raxml_trees/class_tree/class_tiplab.csv") -> class_names
+
+class_data
+# class_data %>% 
+#   as.tibble() %>%
+#   View()
+# View(class_names)
+```
+
+Both have 69 (hehe) species in them so thats good. 
+Alos have all the bootstrap values whic is what we want. 
+
+I rooted the trees in raxml, so I do not need to re-route here. Just need to plot and visualise. 
+
+```{r adding in full names, echo = F}
+class_data %>% 
+  as.tibble() %>% 
+  full_join(class_names, 
+            join_by(label == tree_tip)) %>% 
+  dplyr::select(1:4, Species, Class) %>% 
+  as.treedata() -> class_data_fixed
+class_data_fixed %>% as.tibble() %>% View()
+```
+
+```{r plotting the tree, fig.width = 10, fig.height=10, echo = F}
+ggtree(class_data_fixed, 
+       ladderize = T, 
+       size = 0.25) +
+  geom_tiplab(aes(label = Species), 
+              size = 2, 
+              align = F, 
+             family = "mono") +
+  xlim(-1, 3) +
+  geom_rootedge(rootedge = 1) +
+  geom_nodelab(aes(x=branch, label = node), 
+               vjust=-.5, size=2)
+```
+
+Okay this is looking good, but now i want to 
+- have root on bottom
+- rotate on nodes so it looks better
+
+Just need to switch `ladderize = T` here and it maintains branch length and makes it all pretty. 
+
+```{r prepping data frames for plotting and labelling, include = F}
+tree_df <- fortify(class_data_fixed)
+head(tree_df)
+
+## getting bootsatrap nodes <100 for plotting
+low_bootstrap_nodes <- tree_df %>%
+  filter(!isTip & !is.na(label) & as.numeric(label) < 100)
+
+## position of plotting the values for less than 100
+low_bootstrap_nodes <- low_bootstrap_nodes %>%
+  mutate(
+    label_x = x + -0.08,  
+    label_y = y + 0.7  
+  )
+
+## making a true/false column for labuls and bolding
+class_data_fixed %>% 
+  as.tibble() %>% 
+  mutate(is_laboul = ifelse(Class == "Laboulbeniomycetes", TRUE, FALSE)) %>% 
+  as.treedata() -> class_data_fixed
+```
+
+```{r figure tree dothids, fig.width = 12, fig.height=15, echo = F}
+ggtree(class_data_fixed,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(
+      label = Species,
+      fontface = ifelse(is_laboul, "bold.italic", "italic")
+    ),
+    size = 4.5,
+    align = F,
+    family = "times"
+  ) +
+  geom_rootedge(rootedge = 0.3) +
+  geom_text(
+    data = subset(tree_df,!isTip &
+                    !is.na(label) & as.numeric(label) < 100),
+    aes(x = x,
+        y = y,
+        label = label),
+    size = 3,
+    hjust = 3,
+    vjust = -1.5
+  ) +
+  geom_point(
+    data = subset(tree_df,!isTip & label == "100"),
+    aes(x = x, y = y),
+    size = 1.5,
+    shape = 21,
+    fill = "black",
+    stroke = 0
+  ) +
+  geom_treescale(
+    fontsize = 3,
+    x = -0.3,
+    family = "times",
+    linesize = 1,
+    offset = 1
+  ) +
+  geom_segment(
+    data = low_bootstrap_nodes,
+    aes(
+      x = label_x,
+      y = label_y,
+      xend = x,
+      yend = y
+    ),
+    arrow = arrow(length = unit(0.05, "cm"), 
+                  type = "closed"),
+    size = 0.3
+  ) +
+  xlim(-0.5, 6) +
+  ## Laboul Colouring
+  geom_cladelab(
+    node = 122,
+    label = "Laboulbeniomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1.88,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 122,
+    fill = "steelblue2",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ## Dothido Colouring
+  geom_cladelab(
+    node = 105,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1.4,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 105,
+    fill = "grey60",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  geom_cladelab(
+    node = 102,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 102,
+    fill = "grey60",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ## Helo Colouring
+  geom_cladelab(
+    node = 96,
+    label = "Eurotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1.1,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 96,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ## Lecanoromycetes
+  geom_cladelab(
+    node = 95,
+    label = "Lecanoromycetes",
+    fontsize = 6,
+    align = F,
+    offset = 0.95,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 95,
+    fill = "grey60",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+    ## Lichinomycetes
+  geom_cladelab(
+    node = 91,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1.10,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 91,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+    geom_cladelab(
+    node = 89,
+    label = "",
+    fontsize = 6,
+    align = F,
+    offset = 1.3,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 89,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+      ## Sordariomycetes
+  geom_cladelab(
+    node = 75,
+    label = "Sordariomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1.1,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 75,
+    fill = "grey60",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ## Leotiomycetes
+    geom_cladelab(
+    node = 84,
+    label = "Leotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1.25,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 84,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+## Pezizomycetes
+    geom_cladelab(
+    node = 133,
+    label = "Pezizomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 0.95,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 133,
+    fill = "grey60",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+## Orbiliomycetes
+    geom_cladelab(
+    node = 135,
+    label = "Orbiliomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 1.2,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 135,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  )
+  # ## Saccharomycotina
+  #   geom_cladelab(
+  #   node = 136,
+  #   label = "Saccharomycotina",
+  #   fontsize = 6,
+  #   align = F,
+  #   offset = .82,
+  #   textcolor = 'black',
+  #   barcolor = 'darkgrey',
+  #   family = "times"
+  # ) +
+  # geom_hilight(
+  #   node = 136,
+  #   fill = "lightgray",
+  #   type = "gradient",
+  #   gradient.direction = 'rt',
+  #   alpha = .2, 
+  #   to.bottom = T
+  # ) + 
+  # ## Outgroups
+  #   geom_cladelab(
+  #   node = 137,
+  #   label = "Outgroups",
+  #   fontsize = 6,
+  #   align = F,
+  #   offset = .88,
+  #   textcolor = 'black',
+  #   barcolor = 'darkgrey',
+  #   family = "times"
+  # ) +
+  # geom_hilight(
+  #   node = 137,
+  #   fill = "lightgray",
+  #   type = "gradient",
+  #   gradient.direction = 'rt',
+  #   alpha = .2, 
+  #   to.bottom = T
+  # )
+```
+
+
+## 2. Dothido Tree
+
+```{r reading in the data, incluce = F}
+read.newick(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/raxml_trees/dothido_tree/raxml_sco_g90/RAxML_bipartitions.dothido_SCO_g90_ROOTED") -> dothido_data
+read.csv(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/raxml_trees/dothido_tree/dothido_tiplab.csv") -> dothido_names
+
+# dothido_data
+# dothido_data %>% 
+#   as.tibble() %>%
+#   View()
+# View(dothido_names)
+# View(dothido_names)
+```
+
+Both have 113 species in them so thats good. 
+Also have all the bootstrap values which is what we want. 
+
+I rooted the trees in raxml, so I do not need to re-route here. Just need to plot and visualise. 
+
+```{r adding in full names, echo = F}
+dothido_data %>% 
+  as_tibble() %>% 
+  full_join(dothido_names %>% 
+              mutate(species_name = paste0(Genus, " ", Species)), 
+            join_by(label == tree_tip)) %>% 
+  mutate(class = case_when(Order == "Laboulbeniales" ~ "bold",
+                           Order == "Pyxidiophorales" ~ "bold", 
+                           Order == "Herpomycetales" ~ "bold",
+                           Genus == "Subbaromyces" ~ "bold", 
+                           TRUE ~ "plain"
+                           )) %>%
+  dplyr::select(1:4, species_name, Order, class) %>%
+  as.treedata() -> dothido_data_fixed
+dothido_data_fixed %>% as.tibble() %>% View()
+```
+
+```{r plotting the tree, fig.width = 7, fig.height=14, echo = F}
+ggtree(dothido_data_fixed, 
+       ladderize = T, 
+       size = 0.25) +
+  geom_tiplab(aes(label = species_name), 
+              size = 2, 
+              align = F, 
+             family = "mono") +
+  xlim(-1, 3) +
+  geom_rootedge(rootedge = 1) +
+  geom_nodelab(aes(x=branch, label = node), 
+               vjust=-.5, size=2)
+```
+
+Okay this is looking good, but now i want to 
+- have root on bottom
+- rotate on nodes so it looks better
+
+Just need to switch `ladderize = T` here and it maintains branch length and makes it all pretty. 
+
+```{r getting nodes so i cant rotate stuff, fig.width = 8, fig.height=16, echo = F}
+dothido_df <- fortify(dothido_data_fixed)
+head(dothido_df)
+
+low_bootstrap_nodes <- dothido_df %>%
+  filter(!isTip & !is.na(label) & as.numeric(label) < 100)
+low_bootstrap_nodes <- low_bootstrap_nodes %>%
+  mutate(
+    label_x = x + -0.26,  
+    label_y = y + 0.81  
+  )
+```
+
+```{r plotting tree, fig.width = 8, fig.height=16, echo = F}
+ggtree(dothido_data_fixed,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(label = species_name),
+    size = 3,
+    fontface = "italic",
+    align = F,
+    family = "times"
+  ) +
+  geom_rootedge(rootedge = 0.5) +
+  geom_text(
+    data = subset(dothido_df,!isTip &
+                    !is.na(label) & as.numeric(label) < 100),
+    aes(x = x, 
+        y = y, 
+        label = label),
+    size = 2,
+    hjust = 6.5,
+    vjust = -2
+  ) +
+  geom_point(
+    data = subset(dothido_df,!isTip & label == "100"),
+    aes(x = x,
+        y = y),
+    size = 1.5,
+    shape = 21,
+    fill = "black",
+    stroke = 0
+  ) +
+  geom_treescale(
+    fontsize = 3,
+    x = -0.3,
+    family = "times",
+    linesize = 1,
+    offset = 1
+  ) +
+  geom_segment(
+    data = low_bootstrap_nodes,
+    aes(
+      x = label_x,
+      y = label_y,
+      xend = x,
+      yend = y
+    ),
+    arrow = arrow(length = unit(0.05, "cm"),
+                  type = "closed"),
+    size = 0.3
+  ) +
+  xlim(-0.5, 3.5)
+
+```
+
+```{r annotating tree, fig.width = 8, fig.height=16, echo = F}
+## making a true/false column for labuls and bolding
+dothido_data_fixed %>% 
+  as.tibble() %>% 
+  mutate(is_laboul = ifelse(class == "bold", TRUE, FALSE)) %>%
+  as.treedata() -> dothido_data_fixed
+
+ggtree(dothido_data_fixed,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(label = species_name,
+        fontface = ifelse(is_laboul, "bold.italic", "italic")),
+    size = 3,
+    align = F,
+    family = "times"
+  ) +
+  geom_rootedge(rootedge = 0.5) +
+  geom_text(
+    data = subset(dothido_df,!isTip &
+                    !is.na(label) & as.numeric(label) < 100),
+    aes(x = x, 
+        y = y, 
+        label = label),
+    size = 2,
+    hjust = 4.1,
+    vjust = -2.2
+  ) +
+  geom_point(
+    data = subset(dothido_df,!isTip & label == "100"),
+    aes(x = x,
+        y = y),
+    size = 1.5,
+    shape = 21,
+    fill = "black",
+    stroke = 0
+  ) +
+  geom_treescale(
+    fontsize = 3,
+    x = -0.3,
+    family = "times",
+    linesize = 1,
+    offset = 1
+  ) +
+  geom_segment(
+    data = low_bootstrap_nodes,
+    aes(
+      x = label_x,
+      y = label_y,
+      xend = x,
+      yend = y
+    ),
+    arrow = arrow(length = unit(0.05, "cm"),
+                  type = "closed"),
+    size = 0.3
+  ) +
+  xlim(-0.5, 6) +
+  ##Pleosporales
+  geom_cladelab(
+    node = 144,
+    label = "Pleosporales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.4,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 144,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ##Hysteriales
+  geom_cladelab(
+    node = 143,
+    label = "Hysteriales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.1,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 143,
+    fill = "darkgrey",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ##Mytilinidales
+  geom_cladelab(
+    node = 139,
+    label = "Mytilinidales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.05,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 139,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ##Botryosphaeriales
+  geom_cladelab(
+    node = 192,
+    label = "Botryosphaeriales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.18,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 192,
+    fill = "darkgrey",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ## laboul class highlight
+  geom_hilight(
+    node = 125,
+    fill = "steelblue2",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ##Laboulbeniales
+  geom_cladelab(
+    node = 131,
+    label = "Laboulbeniales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.17,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  ##Herpomycetales
+  geom_cladelab(
+    node = 130,
+    label = "Herpomycetales",
+    fontsize = 4.5,
+    align = F,
+    offset = 2.1,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  ##Pyxidiophorales
+  geom_cladelab(
+    node = 127,
+    label = "Pyxidiophorales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.19,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  ##Venturiales
+  geom_cladelab(
+    node = 122,
+    label = "Venturiales",
+    fontsize = 4.5,
+    align = F,
+    offset = .98,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 122,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) +
+  ##Aulographales
+  geom_cladelab(
+    node = 118,
+    label = "Aulographales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.02,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 214,
+    fill = "darkgrey",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+  ##Mycosphaerellales
+  geom_cladelab(
+    node = 214,
+    label = "Mycosphaerellales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.07,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 118,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+  ##Capnodiales + Mycosphaerellales
+  geom_cladelab(
+    node = 207,
+    label = "Capnodiales \nand \nMycosphaerellales",
+    fontsize = 4.5,
+    align = F,
+    offset = .72,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 207,
+    fill = "darkgrey",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+  ##Myriangiales
+  geom_cladelab(
+    node = 204,
+    label = "Myriangiales",
+    fontsize = 4.5,
+    align = F,
+    offset = .94,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 204,
+    fill = "grey30",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+  ##Dothideales
+  geom_cladelab(
+    node = 203,
+    label = "Dothideales",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.15,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  ) +
+  geom_hilight(
+    node = 203,
+    fill = "darkgrey",
+    type = "gradient",
+    gradient.direction = 'rt',
+    alpha = .7, 
+    to.bottom = T
+  ) + 
+  ##Outgroups
+  geom_cladelab(
+    node = 222,
+    label = "Outgroups",
+    fontsize = 4.5,
+    align = F,
+    offset = 1.1,
+    offset.text = 0.05,
+    textcolor = 'black',
+    barcolor = 'darkgrey',
+    family = "times"
+  )
+```
+
+
+## 3. Class Topology Testing Trees
+
+I used `IQtree` for topology testing. 
+
+```{r reading in and subsetting trees, include = F}
+trees <- read.newick("/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/raxml_trees/class_tree/topo/concat_sco_62.fasta.trees")
+
+length(trees)
+besttree <- trees[[1]]
+sis_doth <- trees[[2]]
+sis_lecp_euro_doth <- trees[[3]]
+sis_pezi <- trees[[4]]
+sis_sord <- trees[[5]]
+```
+
+```{r reading in metadata, include = F}
+read.csv(file = "/Users/benyoung/Library/CloudStorage/OneDrive-UCB-O365/projects/laboul_genomes/raxml_trees/class_tree/class_tiplab.csv") -> class_names
+```
+
+```{r rooting and adding metadata, include = F}
+outgroup_taxa <- c("Schpo1", "Neoirr1")
+all(outgroup_taxa %in% trees[[1]]$tip.label) ## check they correct, they are
+
+## rooting and metadata besttree
+as.phylo(besttree) %>% 
+  root(., 
+       outgroup = outgroup_taxa, 
+                   resolve.root = TRUE) %>% 
+  as.treedata() %>% 
+  as.tibble() %>% 
+  full_join(class_names, 
+            join_by(label == tree_tip)) %>% 
+  dplyr::select(1:4, Species, Class) %>%
+  as.treedata() -> besttree_root
+
+## rooting and metadata besttree
+as.phylo(sis_doth) %>% 
+  root(., 
+       outgroup = outgroup_taxa, 
+                   resolve.root = TRUE) %>% 
+  as.treedata() %>% 
+  as.tibble() %>% 
+  full_join(class_names, 
+            join_by(label == tree_tip)) %>% 
+  dplyr::select(1:4, Species, Class) %>%
+  as.treedata() -> sis_doth_root
+
+## rooting and metadata besttree
+as.phylo(sis_lecp_euro_doth) %>% 
+  root(., 
+       outgroup = outgroup_taxa, 
+                   resolve.root = TRUE) %>% 
+  as.treedata() %>% 
+  as.tibble() %>% 
+  full_join(class_names, 
+            join_by(label == tree_tip)) %>% 
+  dplyr::select(1:4, Species, Class) %>%
+  as.treedata() -> sis_lecp_euro_doth_root
+
+## 
+as.phylo(sis_pezi) %>% 
+  root(., 
+       outgroup = outgroup_taxa, 
+                   resolve.root = TRUE) %>% 
+  as.treedata() %>% 
+  as.tibble() %>% 
+  full_join(class_names, 
+            join_by(label == tree_tip)) %>% 
+  dplyr::select(1:4, Species, Class) %>%
+  as.treedata() -> sis_pezi_root
+
+## rooting and metadata besttree
+as.phylo(sis_sord) %>% 
+  root(., 
+       outgroup = outgroup_taxa, 
+                   resolve.root = TRUE) %>% 
+  as.treedata() %>% 
+  as.tibble() %>% 
+  full_join(class_names, 
+            join_by(label == tree_tip)) %>% 
+  dplyr::select(1:4, Species, Class) %>%
+  as.treedata() -> sis_sord_root
+```
+
+
+### 3.1 - Best Tree Plot
+
+```{r node labels plot, echo = F, fig.width = 10, fig.height=8}
+ggtree(besttree_root) + 
+  geom_nodelab(aes(x=branch, label = node), 
+               vjust=-.5, size=2) + 
+  geom_tiplab(aes(label=label))
+```
+
+```{r best tree plotting, echo = F, fig.width = 10, fig.height=8}
+ggtree(besttree_root,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(label = Species),
+    size = 4,
+    fontface = "italic",
+    align = F,
+    family = "times"
+  ) + 
+  xlim(-0.5, 2.5) + 
+  geom_rootedge(rootedge = 0.3) -> besttree_gg
+
+besttree_gg %>% 
+  scaleClade(node = 125,
+             scale = 0.3) %>% ## laboul scale
+  scaleClade(node = 108,
+             scale = 0.2) %>% ## dothid scale
+  scaleClade(node = 99,
+             scale = 0.3) %>% ## euro scale
+  scaleClade(node = 78,
+             scale = 0.3) %>% ## sord scale
+  scaleClade(node = 87,
+             scale = 0.3) %>% ## leotio scale
+  ## Laboul collapse
+  ggtree::collapse(125,
+                   mode = 'min',
+                   fill = "steelblue2",
+                   color = "black") %>%
+  ## Dothid top collapse
+  ggtree::collapse(108,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## dothid bottom collapes
+  ggtree::collapse(105,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## euro collapse
+  ggtree::collapse(99,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## lecano collapse
+  ggtree::collapse(98,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## lichino top collapse
+  ggtree::collapse(94,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## lichino bottom collapse
+  ggtree::collapse(92,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## sord collapse
+  ggtree::collapse(78,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## leotio collapse
+  ggtree::collapse(87,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## pezi collapse
+  ggtree::collapse(72,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## orbillo collapse
+  ggtree::collapse(74,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## sacharro collapse
+  ggtree::collapse(136,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>% 
+  ## taphin collapse
+  ggtree::collapse(137,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") +
+  geom_cladelab(
+    node = 125,
+    label = "Laboulbeniomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 0.43 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 108,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .28,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 105,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .34 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 99,
+    label = "Eurotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .42 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 98,
+    label = "Lecanoromycetes",
+    fontsize = 6,
+    align = F,
+    offset = .22 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 94,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 92,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .32 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 78,
+    label = "Sordariomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .28 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 87,
+    label = "Leotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 72,
+    label = "Pezizomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .44 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 74,
+    label = "Orbiliomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .15 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 136,
+    label = "Saccharomycotina",
+    fontsize = 6,
+    align = F,
+    offset = 0.98,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 137,
+    label = "Taphrinomycotina",
+    fontsize = 6,
+    align = F,
+    offset = .92,
+    textcolor = 'black',
+    barcolor = 'black'
+  )
+```
+
+
+### 3.2 - Sister Dothid Tree plot
+
+```{r si dothid node label plot, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_doth_root) + 
+  geom_nodelab(aes(x=branch, label = node), 
+               vjust=-.5, size=2) + 
+  geom_tiplab(aes(label=label))
+```
+
+
+```{r sister dothid tree plotting, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_doth_root,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(label = Species),
+    size = 4,
+    fontface = "italic",
+    align = F,
+    family = "times"
+  ) + 
+  xlim(-0.5, 2.5) + 
+  geom_rootedge(rootedge = -0.3) -> sisdothid_gg
+
+sisdothid_gg %>%
+  scaleClade(node = 105,
+             scale = 0.3) %>% ## laboul scale
+  scaleClade(node = 115,
+             scale = 0.2) %>% ## dothid scale
+  scaleClade(node = 82,
+             scale = 0.3) %>% ## euro scale
+  scaleClade(node = 99,
+             scale = 0.3) %>% ## sord scale
+  scaleClade(node = 87,
+             scale = 0.3) %>% ## leotio scale
+  ## Laboul collapse
+  ggtree::collapse(105,
+                   mode = 'min',
+                   fill = "steelblue2",
+                   color = "black") %>%
+  ## Dothid top collapse
+  ggtree::collapse(115,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  # euro collapse
+  ggtree::collapse(99,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lecano collapse
+  ggtree::collapse(98,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino top collapse
+  ggtree::collapse(94,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino bottom collapse
+  ggtree::collapse(92,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sord collapse
+  ggtree::collapse(82,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## leotio collapse
+  ggtree::collapse(78,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## pezi collapse
+  ggtree::collapse(72,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## orbillo collapse
+  ggtree::collapse(74,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sacharro collapse
+  ggtree::collapse(136,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## taphin collapse
+  ggtree::collapse(137,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") +
+  geom_cladelab(
+    node = 105,
+    label = "Laboulbeniomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 0.43 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 115,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .34 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 99,
+    label = "Eurotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .42 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 98,
+    label = "Lecanoromycetes",
+    fontsize = 6,
+    align = F,
+    offset = .22 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 94,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 92,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .32 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 82,
+    label = "Sordariomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .28 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 78,
+    label = "Leotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 72,
+    label = "Pezizomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .44 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 74,
+    label = "Orbiliomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .15 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 136,
+    label = "Saccharomycotina",
+    fontsize = 6,
+    align = F,
+    offset = 0.98,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 137,
+    label = "Taphrinomycotina",
+    fontsize = 6,
+    align = F,
+    offset = .92,
+    textcolor = 'black',
+    barcolor = 'black'
+  )
+```
+
+
+### 3.3 - Sister Lecp Euro and dothids
+
+```{r si dothid node label plot, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_lecp_euro_doth_root) + 
+  geom_nodelab(aes(x=branch, label = node), 
+               vjust=-.5, size=2) + 
+  geom_tiplab(aes(label=label))
+```
+
+```{r sister dothid tree plotting, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_lecp_euro_doth_root,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(label = Species),
+    size = 4,
+    fontface = "italic",
+    align = F,
+    family = "times"
+  ) + 
+  xlim(-0.5, 2.5) + 
+  geom_rootedge(rootedge = -0.3) -> sislecpeurodoth_gg
+
+sislecpeurodoth_gg %>%
+  scaleClade(node = 105,
+             scale = 0.3) %>% ## laboul scale
+    scaleClade(node = 110,
+             scale = 0.3) %>% ## laboul scale
+  scaleClade(node = 115,
+             scale = 0.2) %>% ## dothid scale
+  scaleClade(node = 82,
+             scale = 0.3) %>% ## euro scale
+  scaleClade(node = 99,
+             scale = 0.3) %>% ## sord scale
+  scaleClade(node = 97,
+             scale = 0.3) %>% ## leotio scale
+  ## Laboul collapse
+  ggtree::collapse(97,
+                   mode = 'min',
+                   fill = "steelblue2",
+                   color = "black") %>%
+  ## Dothid top collapse
+  ggtree::collapse(115,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  # euro collapse
+  ggtree::collapse(110,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lecano collapse
+  ggtree::collapse(109,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino top collapse GOOD
+  ggtree::collapse(94,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino bottom collapse GOOD
+  ggtree::collapse(92,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sord collapse
+  ggtree::collapse(82,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## leotio collapse
+  ggtree::collapse(78,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## pezi collapse GOOD
+  ggtree::collapse(72,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## orbillo collapse GOOD
+  ggtree::collapse(74,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sacharro collapse GOOD
+  ggtree::collapse(136,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## taphin collapse GOOD
+  ggtree::collapse(137,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") +
+  geom_cladelab(
+    node = 97,
+    label = "Laboulbeniomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 0.43 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 115,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .34 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 110,
+    label = "Eurotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .42 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 109,
+    label = "Lecanoromycetes",
+    fontsize = 6,
+    align = F,
+    offset = .22 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 94,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 92,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .32 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 82,
+    label = "Sordariomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .28 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 78,
+    label = "Leotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 72,
+    label = "Pezizomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .44 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 74,
+    label = "Orbiliomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .15 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 136,
+    label = "Saccharomycotina",
+    fontsize = 6,
+    align = F,
+    offset = 0.98,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 137,
+    label = "Taphrinomycotina",
+    fontsize = 6,
+    align = F,
+    offset = .92,
+    textcolor = 'black',
+    barcolor = 'black'
+  )
+```
+
+
+### 3.4 - Sister Pezi
+
+```{r si dothid node label plot, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_pezi_root) + 
+  geom_nodelab(aes(x=branch, label = node), 
+               vjust=-.5, size=2) + 
+  geom_tiplab(aes(label=label))
+```
+
+```{r sister dothid tree plotting, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_pezi_root,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(label = Species),
+    size = 4,
+    fontface = "italic",
+    align = F,
+    family = "times"
+  ) + 
+  xlim(-0.5, 2.5) + 
+  geom_rootedge(rootedge = -0.3) -> sispezi_gg
+
+sispezi_gg %>%
+  scaleClade(node = 105,
+             scale = 0.3) %>% ## laboul scale
+  scaleClade(node = 104,
+             scale = 0.2) %>% ## dothid scale
+  scaleClade(node = 82,
+             scale = 0.3) %>% ## euro scale
+  scaleClade(node = 99,
+             scale = 0.3) %>% ## sord scale
+  scaleClade(node = 125,
+             scale = 0.3) %>% ## leotio scale
+  ## Laboul collapse
+  ggtree::collapse(125,
+                   mode = 'min',
+                   fill = "steelblue2",
+                   color = "black") %>%
+  ## Dothid top collapse
+  ggtree::collapse(104,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  # euro collapse
+  ggtree::collapse(99,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lecano collapse
+  ggtree::collapse(98,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino top collapse GOOD
+  ggtree::collapse(94,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino bottom collapse GOOD
+  ggtree::collapse(92,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sord collapse
+  ggtree::collapse(82,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## leotio collapse
+  ggtree::collapse(78,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## pezi collapse GOOD
+  ggtree::collapse(72,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## orbillo collapse GOOD
+  ggtree::collapse(74,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sacharro collapse GOOD
+  ggtree::collapse(136,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## taphin collapse GOOD
+  ggtree::collapse(137,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") +
+  geom_cladelab(
+    node = 125,
+    label = "Laboulbeniomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 0.43 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 104,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .34 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 99,
+    label = "Eurotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .42 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 98,
+    label = "Lecanoromycetes",
+    fontsize = 6,
+    align = F,
+    offset = .22 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 94,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 92,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .32 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 82,
+    label = "Sordariomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .28 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 78,
+    label = "Leotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 72,
+    label = "Pezizomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .44 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 74,
+    label = "Orbiliomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .15 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 136,
+    label = "Saccharomycotina",
+    fontsize = 6,
+    align = F,
+    offset = 0.98,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 137,
+    label = "Taphrinomycotina",
+    fontsize = 6,
+    align = F,
+    offset = .92,
+    textcolor = 'black',
+    barcolor = 'black'
+  )
+```
+
+
+### 3.4 - Sister Sord
+
+```{r si dothid node label plot, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_sord_root) + 
+  geom_nodelab(aes(x=branch, label = node), 
+               vjust=-.5, size=2) + 
+  geom_tiplab(aes(label=label))
+```
+
+
+```{r sister dothid tree plotting, echo = F, fig.width = 10, fig.height=8}
+ggtree(sis_sord_root,
+       ladderize = T,
+       size = 0.25) +
+  geom_tiplab(
+    aes(label = Species),
+    size = 4,
+    fontface = "italic",
+    align = F,
+    family = "times"
+  ) + 
+  xlim(-0.5, 2.5) + 
+  geom_rootedge(rootedge = -0.3) -> sissord_gg
+
+sissord_gg %>%
+  scaleClade(node = 115,
+             scale = 0.2) %>% ## laboul scale
+  scaleClade(node = 92,
+             scale = 0.3) %>% ## dothid scale
+  scaleClade(node = 110,
+             scale = 0.3) %>% ## euro scale
+  scaleClade(node = 83,
+             scale = 0.3) %>% ## sord scale
+  # scaleClade(node = 92,
+  #            scale = 0.3) %>% ## leotio scale
+  ## Laboul collapse
+  ggtree::collapse(92,
+                   mode = 'min',
+                   fill = "steelblue2",
+                   color = "black") %>%
+  ## Dothid top collapse
+  ggtree::collapse(115,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  # euro collapse
+  ggtree::collapse(110,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lecano collapse
+  ggtree::collapse(109,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino top collapse GOOD
+  ggtree::collapse(105,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## lichino bottom collapse GOOD
+  ggtree::collapse(103,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sord collapse
+  ggtree::collapse(83,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## leotio collapse
+  ggtree::collapse(78,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## pezi collapse GOOD
+  ggtree::collapse(72,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## orbillo collapse GOOD
+  ggtree::collapse(74,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## sacharro collapse GOOD
+  ggtree::collapse(136,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") %>%
+  ## taphin collapse GOOD
+  ggtree::collapse(137,
+                   mode = 'min',
+                   fill = "grey40",
+                   color = "black") +
+  geom_cladelab(
+    node = 92,
+    label = "Laboulbeniomycetes",
+    fontsize = 6,
+    align = F,
+    offset = 0.43 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 115,
+    label = "Dothideomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .34 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 110,
+    label = "Eurotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .42 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 109,
+    label = "Lecanoromycetes",
+    fontsize = 6,
+    align = F,
+    offset = .22 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 105,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 103,
+    label = "Lichinomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .32 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 83,
+    label = "Sordariomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .28 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 78,
+    label = "Leotiomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .30,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 72,
+    label = "Pezizomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .44 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 74,
+    label = "Orbiliomycetes",
+    fontsize = 6,
+    align = F,
+    offset = .15 ,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 136,
+    label = "Saccharomycotina",
+    fontsize = 6,
+    align = F,
+    offset = 0.98,
+    textcolor = 'black',
+    barcolor = 'black'
+  ) +
+  geom_cladelab(
+    node = 137,
+    label = "Taphrinomycotina",
+    fontsize = 6,
+    align = F,
+    offset = .92,
+    textcolor = 'black',
+    barcolor = 'black'
+  )
+```
